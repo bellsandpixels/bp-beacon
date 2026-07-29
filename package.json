@@ -4,16 +4,16 @@
   "private": true,
   "description": "Shared Bells & Pixels Beacon feedback SDK (client-portal-governed; decision #63). Design-system-agnostic web FeedbackPane + a canonical adapter that speaks the /api/beacon-signal envelope. The envelope contract is canonical in client-portal docs/beacon-anon-ingest-spec.md.",
   "type": "module",
-  "//consumption": "B&P web consumers are bundlers (Next.js) that transpile the source directly via transpilePackages, so the entry points resolve to src/ - no build step needed in a consumer's CI. `npm run build` still emits dist/ for any non-bundler consumer.",
-  "types": "./src/index.ts",
-  "main": "./src/index.ts",
+  "//consumption": "Ships BUILT dist/ (committed) so consumers vendor it as a submodule and import plain JS - no build step or transpilePackages in a consumer's CI, and no .ts-across-symlink resolution snag. Rebuild dist (npm run build) whenever src changes; a CI check keeps dist in sync with src.",
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
-  "files": ["src", "dist"],
+  "files": ["dist", "src"],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
