@@ -1,0 +1,32 @@
+{
+  "name": "@bp/beacon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Bells & Pixels Beacon feedback SDK (client-portal-governed; decision #63). Design-system-agnostic web FeedbackPane + a canonical adapter that speaks the /api/beacon-signal envelope. The envelope contract is canonical in client-portal docs/beacon-anon-ingest-spec.md.",
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.8.2",
+  "license": "UNLICENSED"
+}
