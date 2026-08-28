@@ -13,6 +13,8 @@ export interface BeaconContext {
     appVersion: string;
     env: string;
     platform: 'web';
+    device: string;
+    os: string;
     osMajor: string;
     route: string;
     locale: string;

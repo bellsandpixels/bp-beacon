@@ -36,7 +36,9 @@ export interface BeaconContext {
   appVersion: string
   env: string // coarse ring: "production" | "alpha" | "dev"
   platform: 'web'
-  osMajor: string // OS family + major only (e.g. "iOS 18"); never a raw UA
+  device: string // coarse form factor ONLY: "phone" | "tablet" | "desktop" (never a model, never dimensions)
+  os: string // coarse OS family ONLY: "win" | "ios" | "android" | "mac" | "linux" (never a build/patch)
+  osMajor: string // OS family + major (e.g. "iOS 18"); the version detail behind `os`. Never a raw UA
   route: string // in-app route PATH only; query + fragment stripped
   locale: string // e.g. "en-US"
 }

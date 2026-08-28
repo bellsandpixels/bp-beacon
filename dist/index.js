@@ -11,6 +11,6 @@
 //     appName: 'Toudai Studio', appVersion: '0.1.0', env: 'production',
 //   })
 //   <FeedbackPane adapter={adapter} gatherContext={() => gatherWebContext({ appName, appVersion, env })} />
-export { gatherWebContext, osMajorFromUA } from './diagnostics.js';
+export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA } from './diagnostics.js';
 export { createBeaconAdapter, buildEnvelope } from './adapter.js';
 export { FeedbackPane } from './FeedbackPane.js';
