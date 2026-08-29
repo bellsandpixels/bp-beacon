@@ -2,3 +2,8 @@ export type { FeedbackKind, FeedbackStatus, FeedbackReport, FeedbackAdapter, Bea
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA, type WebContextConfig } from './diagnostics.js';
 export { createBeaconAdapter, buildEnvelope, type BeaconAdapterConfig } from './adapter.js';
 export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js';
+export type { CheckSeverity, WalkCheck, WalkSurface, WalkArea, ValidationCatalogue, WalkState, WalkSummary, WalkIssue, WalkIdentity, WalkAvailability, WalkAdapter, } from './walkTypes.js';
+export { WalkPane, type WalkPaneProps } from './WalkPane.js';
+export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js';
+export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js';
+export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js';

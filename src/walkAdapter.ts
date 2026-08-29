@@ -27,6 +27,7 @@ export function createStubWalkAdapter(catalogue: ValidationCatalogue, opts: Stub
   const env = opts.env ?? 'uat'
   let authed = opts.authenticated ?? false
   const state: WalkState = { walked: {}, defects: {} }
+  const refs: Record<number, string> = {} // the intake ref minted per flagged check, reused when its note updates
   const completed: WalkSummary[] = []
   const issues: WalkIssue[] = []
   let seq = 1
@@ -46,12 +47,14 @@ export function createStubWalkAdapter(catalogue: ValidationCatalogue, opts: Stub
       else delete state.walked[surfaceKey]
     },
     flag: async ({ checkRef, note }) => {
+      // Upsert by checkRef: one ref per check, minted once and reused when the note is edited.
       state.defects[checkRef] = note
-      const ref = `INT-${String(1000 + seq++)}`
+      const ref = refs[checkRef] ?? (refs[checkRef] = `INT-${String(1000 + seq++)}`)
       return { id: ref, reference: ref }
     },
     clearFlag: async (checkRef) => {
       delete state.defects[checkRef]
+      delete refs[checkRef]
     },
     submit: async () => {
       const v = deriveVerdict(catalogue, state)
@@ -60,11 +63,12 @@ export function createStubWalkAdapter(catalogue: ValidationCatalogue, opts: Stub
         walkId,
         build,
         env,
+        submittedOn: new Date().toISOString(),
         coverage: { walked: v.walked, total: v.total },
         flagged: v.defects,
       }
       completed.unshift(summary)
-      // Move noted flags into "my issues" with a fresh Submitted disposition.
+      // Move noted flags into "my issues" with a fresh Submitted disposition, keeping each flag's own ref.
       for (const key of Object.keys(state.defects)) {
         const n = Number(key)
         const note = state.defects[n]
@@ -73,7 +77,7 @@ export function createStubWalkAdapter(catalogue: ValidationCatalogue, opts: Stub
         const surface = surfacesOf(catalogue).find((s) => s.checks.some((c) => c.n === n))
         issues.unshift({
           id: `iss-${seq++}`,
-          reference: `INT-${String(1000 + seq)}`,
+          reference: refs[n] ?? `INT-${String(1000 + seq++)}`,
           checkRef: n,
           surfaceKey: surface?.key,
           title: chk?.text ?? `Check ${n}`,
@@ -81,6 +85,10 @@ export function createStubWalkAdapter(catalogue: ValidationCatalogue, opts: Stub
           build,
         })
       }
+      // Consume the flags: they now live as issues, so a re-submit cannot duplicate them and the live
+      // verdict reflects that they were moved out.
+      state.defects = {}
+      for (const key of Object.keys(refs)) delete refs[Number(key)]
       return summary
     },
     listMine: async () => [...completed],

@@ -55,7 +55,7 @@ export interface WalkSummary {
   walkId: string
   build: string // Major.Minor.Build the walk was run on
   env: string // the ring: "uat" | "alpha" | ...
-  submittedon?: string
+  submittedOn?: string // ISO timestamp the walk record was written
   coverage: { walked: number; total: number }
   flagged: number
 }
@@ -103,7 +103,9 @@ export interface WalkAdapter {
   start: () => Promise<WalkState>
   // One-tap coverage: mark a surface walked (or unwalked).
   markWalked: (surfaceKey: string, walked: boolean) => Promise<void>
-  // Flag a check -> creates the cohort intake item (check-ref + build/env), reusing the beacon-signal path.
+  // Flag a check -> upserts this viewer's intake item for the check (check-ref + build/env), reusing the
+  // beacon-signal path. Idempotent by checkRef within the walk: re-calling updates the note in place and
+  // returns the same ref, never a duplicate item. Callers sync once (on blur / at submit), not per keystroke.
   flag: (input: { checkRef: number; note: string }) => Promise<{ id: string; reference?: string }>
   // Clear a flag (before it is submitted).
   clearFlag: (checkRef: number) => Promise<void>

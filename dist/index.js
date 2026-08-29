@@ -14,3 +14,7 @@
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA } from './diagnostics.js';
 export { createBeaconAdapter, buildEnvelope } from './adapter.js';
 export { FeedbackPane } from './FeedbackPane.js';
+export { WalkPane } from './WalkPane.js';
+export { WalkSurfacePane } from './WalkSurfacePane.js';
+export { deriveVerdict, surfacesOf, checkByNumber } from './walkVerdict.js';
+export { createStubWalkAdapter } from './walkAdapter.js';

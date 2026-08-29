@@ -43,14 +43,24 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }: Walk
 
   async function toggleWalked(surfaceKey: string) {
     const next = !state.walked[surfaceKey]
+    // Unwalking a surface also clears its flags, so a counted defect can never survive on a NOT-WALKED
+    // surface (which would make the verdict read "must-fix ... across 0 walked surfaces").
+    const surface = surfaces.find((s) => s.key === surfaceKey)
+    const clearing =
+      !next && surface
+        ? surface.checks.map((c) => c.n).filter((n) => Object.prototype.hasOwnProperty.call(state.defects, n))
+        : []
     setState((s) => {
       const walked = { ...s.walked }
       if (next) walked[surfaceKey] = true
       else delete walked[surfaceKey]
-      return { ...s, walked }
+      const defects = { ...s.defects }
+      for (const n of clearing) delete defects[n]
+      return { ...s, walked, defects }
     })
     try {
       await adapter.markWalked(surfaceKey, next)
+      for (const n of clearing) await adapter.clearFlag(n)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save that.')
     }
@@ -81,10 +91,21 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }: Walk
     }
   }
 
+  // Typing only updates local state; the note is synced to the adapter once, on blur (below). flag()
+  // upserts by checkRef, so one intake item is updated, not one created per keystroke.
   function setNote(n: number, note: string) {
     setState((s) => ({ ...s, defects: { ...s.defects, [n]: note } }))
-    // The note is the defect; sync on change (empty is an in-progress flag, still tracked).
-    void adapter.flag({ checkRef: n, note }).catch(() => undefined)
+  }
+
+  // The note is the defect. Sync it when the field loses focus, and surface a failure like every other
+  // write, so a lost note can never pass unnoticed into a submit (empty note = in-progress flag, still
+  // tracked). Awaited and single, so writes stay ordered and last-typed wins.
+  async function syncNote(n: number, note: string) {
+    try {
+      await adapter.flag({ checkRef: n, note })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save that note.')
+    }
   }
 
   async function submit() {
@@ -167,6 +188,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }: Walk
                         <input
                           value={note}
                           onChange={(e) => setNote(c.n, e.target.value)}
+                          onBlur={(e) => syncNote(c.n, e.target.value)}
                           placeholder="What is wrong? This becomes the defect record."
                           aria-label={`Defect note for check ${c.n}`}
                           style={{ display: 'block', width: '100%', marginTop: 6, padding: 6, fontSize: 13, borderRadius: v('radius', '7px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') }}
