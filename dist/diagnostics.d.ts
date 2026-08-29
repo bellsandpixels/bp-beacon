@@ -5,4 +5,6 @@ export interface WebContextConfig {
     env: string;
 }
 export declare function osMajorFromUA(ua?: string): string;
+export declare function osFromUA(ua?: string): string;
+export declare function deviceFromUA(ua?: string): string;
 export declare function gatherWebContext(cfg: WebContextConfig): BeaconContext;

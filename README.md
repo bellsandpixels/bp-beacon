@@ -14,6 +14,9 @@ Governed by **client-portal** (decision #63). The wire envelope is canonical in 
 - `createBeaconAdapter({ endpoint, product, appName, appVersion, env })` - builds the envelope
   (`product/kind/title/details/consent/clientReportId/hp/context`) and POSTs it. Consent-gated D3 context.
 - `gatherWebContext` / `buildEnvelope` - the allow-list diagnostics + the pure envelope builder (unit-testable).
+  The consented D3 context is coarse ONLY: `appName/appVersion/env/platform`, `device` (phone/tablet/desktop),
+  `os` (win/ios/android/mac/linux) + `osMajor` (the version detail), `route` (path), `locale`. Never a stable
+  id / IP / full UA. `deviceFromUA` / `osFromUA` / `osMajorFromUA` are exported and unit-tested.
 - Types: `FeedbackKind`, `FeedbackAdapter`, `BeaconEnvelope`, `BeaconContext`, `FeedbackStatus`, ...
 
 The native (Android/iOS) KMP client stays in the fudemoji repo until a second native consumer exists; it
