@@ -28,7 +28,10 @@ export function FeedbackPane({ adapter, gatherContext, onDone }: FeedbackPanePro
   const [kind, setKind] = useState<FeedbackKind>('bug')
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
-  const [consent, setConsent] = useState(false)
+  // Default ON, still declinable (owner ruling 2026-08-29): diagnostics are pre-attached so a triager can
+  // reproduce a report, and the reporter can untick to file a content-only report. Disclosed +
+  // inspectable ("What's included?"); the D3 allow-list is unchanged (no id, no study data, ever).
+  const [consent, setConsent] = useState(true)
   const [showIncluded, setShowIncluded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +112,7 @@ export function FeedbackPane({ adapter, gatherContext, onDone }: FeedbackPanePro
       <div style={{ display: 'grid', gap: 4 }}>
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span>Include basic diagnostics (app version, screen, platform, language) to help us investigate.</span>
+          <span>Include basic diagnostics (app version, screen, device type, OS, language) to help us investigate.</span>
         </label>
         {gatherContext ? (
           <button
