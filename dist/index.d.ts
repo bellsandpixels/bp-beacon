@@ -7,3 +7,4 @@ export { WalkPane, type WalkPaneProps } from './WalkPane.js';
 export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js';
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js';
 export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js';
+export { createWalkAdapter, type WalkAdapterConfig } from './walkClient.js';

@@ -18,3 +18,6 @@ export { WalkPane } from './WalkPane.js';
 export { WalkSurfacePane } from './WalkSurfacePane.js';
 export { deriveVerdict, surfacesOf, checkByNumber } from './walkVerdict.js';
 export { createStubWalkAdapter } from './walkAdapter.js';
+// The portal-backed WalkAdapter (T3): maps the WalkAdapter interface onto the client-portal /api/walk/*
+// endpoints. The one client implementation a portal-backed product wires (the stub above is for demos).
+export { createWalkAdapter } from './walkClient.js';
