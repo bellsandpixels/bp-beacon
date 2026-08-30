@@ -39,6 +39,7 @@ export type {
   WalkIssue,
   WalkIdentity,
   WalkAvailability,
+  WalkInProgress,
   WalkAdapter,
 } from './walkTypes.js'
 export { WalkPane, type WalkPaneProps } from './WalkPane.js'

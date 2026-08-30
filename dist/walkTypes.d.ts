@@ -57,10 +57,21 @@ export interface WalkAvailability {
     env: string;
     catalogueId: string;
 }
+export interface WalkInProgress {
+    walkId: string;
+    build: string;
+    env: string;
+    coverage: {
+        walked: number;
+        total: number;
+    };
+    flagged: number;
+}
 export interface WalkAdapter {
     authenticate: () => Promise<WalkIdentity>;
     identity: () => Promise<WalkIdentity>;
     available: () => Promise<WalkAvailability | null>;
+    current: () => Promise<WalkInProgress | null>;
     start: () => Promise<WalkState>;
     markWalked: (surfaceKey: string, walked: boolean) => Promise<void>;
     flag: (input: {
