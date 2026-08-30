@@ -83,6 +83,21 @@ export function createWalkAdapter(cfg) {
                 return null;
             return { offered: true, build: cfg.build ?? '', env: cfg.env ?? '', catalogueId: cfg.catalogueId };
         },
+        current: async () => {
+            // Read-only: the caller's in-progress walk for THIS catalogue. Never creates one (unlike /start), so
+            // asking "do I have a walk under way?" never forks a walk. A missing/empty walkId -> nothing under way.
+            const r = await getJson(`/current?catalogueId=${encodeURIComponent(cfg.catalogueId)}`);
+            const ip = r.inProgress;
+            if (!ip || !ip.walkId)
+                return null;
+            return {
+                walkId: ip.walkId,
+                build: ip.build ?? '',
+                env: ip.env ?? '',
+                coverage: { walked: ip.coverage?.walked ?? 0, total: ip.coverage?.total ?? 0 },
+                flagged: ip.flagged ?? 0,
+            };
+        },
         start: async () => {
             const r = await postJson('/start', {
                 cohortId: cfg.cohortId,

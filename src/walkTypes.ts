@@ -89,6 +89,18 @@ export interface WalkAvailability {
   catalogueId: string
 }
 
+// The viewer's IN-PROGRESS (unsubmitted) walk for the offered catalogue, with how far it has got. The hub
+// renders this as "Resume walk - N / M walked" instead of a bare "Start", so a server-side resume (start()
+// returns an existing unsubmitted walk, never forking a second) is announced up front and never reads as
+// "it silently carried over the last walk". null when the viewer has no walk under way.
+export interface WalkInProgress {
+  walkId: string
+  build: string
+  env: string
+  coverage: { walked: number; total: number }
+  flagged: number // recorded defects (a flag with a non-empty note) so far
+}
+
 // ---- The backend-agnostic walk adapter, the walk analog of FeedbackAdapter. The host wires it (a shared
 // portal implementation, or a scaffold); the walk pane calls it. authenticate / listMine / listMyIssues are
 // the authenticated (cohort tester) shape. The kit stays free of any specific backend. ----
@@ -99,6 +111,10 @@ export interface WalkAdapter {
   identity: () => Promise<WalkIdentity>
   // Is a walk offered for THIS build/cohort? Drives the affordance + the launch nudge. null = none.
   available: () => Promise<WalkAvailability | null>
+  // The viewer's in-progress (unsubmitted) walk for the offered catalogue, or null. READ-ONLY: unlike
+  // start(), it NEVER creates a walk, so the hub can offer Resume vs Start (and the coverage so far)
+  // without forking one. null = nothing under way.
+  current: () => Promise<WalkInProgress | null>
   // Start (or resume) this viewer's walk for the current build; returns the live state.
   start: () => Promise<WalkState>
   // One-tap coverage: mark a surface walked (or unwalked).

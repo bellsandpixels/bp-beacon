@@ -8,7 +8,7 @@
 // and live wiring land in Phase B. See the approved Beacon walk mocks.
 
 import { useCallback, useEffect, useState } from 'react'
-import type { WalkAdapter, WalkAvailability, WalkSummary, WalkIssue, WalkIdentity } from './walkTypes.js'
+import type { WalkAdapter, WalkAvailability, WalkInProgress, WalkSummary, WalkIssue, WalkIdentity } from './walkTypes.js'
 
 export interface WalkPaneProps {
   adapter: WalkAdapter
@@ -54,6 +54,7 @@ function Zone({ label, children }: { label: string; children: React.ReactNode })
 export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
   const [identity, setIdentity] = useState<WalkIdentity | null>(null)
   const [availability, setAvailability] = useState<WalkAvailability | null>(null)
+  const [inProgress, setInProgress] = useState<WalkInProgress | null>(null)
   const [completed, setCompleted] = useState<WalkSummary[]>([])
   const [issues, setIssues] = useState<WalkIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -63,12 +64,17 @@ export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
     setBusy(true)
     setError(null)
     try {
-      const [avail, mine, myIssues] = await Promise.all([
+      const [avail, current, mine, myIssues] = await Promise.all([
         adapter.available(),
+        // Additive-only: the in-progress read just decides Start vs Resume, so its failure must degrade to
+        // "Start walk", never blank the hub. Isolate it (unlike the other three, which gate the hub) so a
+        // 404 - e.g. the current-walk endpoint not yet deployed (the API deploys by hand) - yields null.
+        adapter.current().catch(() => null),
         adapter.listMine(),
         adapter.listMyIssues(),
       ])
       setAvailability(avail)
+      setInProgress(current)
       setCompleted(mine)
       setIssues(myIssues)
     } catch (e) {
@@ -166,10 +172,25 @@ export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
               gap: 8,
             }}
           >
-            <strong style={{ fontFamily: v('serif', 'inherit') }}>Walk this build</strong>
+            {/* Announce a resume up front: start() returns the tester's existing unsubmitted walk (never
+                forks one), so without this the pre-filled coverage reads as "it carried over the last walk". */}
+            <strong style={{ fontFamily: v('serif', 'inherit') }}>
+              {inProgress ? 'Resume your walk' : 'Walk this build'}
+            </strong>
+            {/* When resuming, name the walk's OWN build/env (an older unsubmitted walk is resumed as-is; the
+                start/current queries carry no build filter), not the current offer's, so the card is honest. */}
             <span style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.8 }}>
-              {availability.build} ({availability.env})
+              {(inProgress?.build || availability.build)} ({inProgress?.env || availability.env})
             </span>
+            {inProgress ? (
+              <span style={{ fontSize: 12, opacity: 0.75 }}>
+                In progress:{' '}
+                {inProgress.coverage.total > 0
+                  ? `${inProgress.coverage.walked} / ${inProgress.coverage.total} walked`
+                  : `${inProgress.coverage.walked} walked`}
+                {inProgress.flagged ? ` · ${inProgress.flagged} flagged` : ''} · picks up where you left off
+              </span>
+            ) : null}
             <button
               onClick={() => (onStartWalk && availability ? onStartWalk(availability) : undefined)}
               disabled={!onStartWalk}
@@ -183,7 +204,7 @@ export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
                 justifySelf: 'start',
               }}
             >
-              Start walk
+              {inProgress ? 'Resume walk' : 'Start walk'}
             </button>
           </div>
         ) : (

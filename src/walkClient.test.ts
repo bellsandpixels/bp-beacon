@@ -104,3 +104,26 @@ test('listMine / listMyIssues map the portal shapes', async () => {
   assert.equal(issues[0].reference, 'INT-0042')
   assert.equal(issues[0].status, 'routed')
 })
+
+test('current() reads the in-progress walk for THIS catalogue and maps it', async () => {
+  const { impl, calls } = mockFetch({
+    'GET /api/walk/current': { inProgress: { walkId: 'w-7', build: '0.5.1900', env: 'uat', coverage: { walked: 2, total: 4 }, flagged: 1 } },
+  })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  const ip = await a.current()
+  assert.ok(ip, 'returns the in-progress walk')
+  assert.equal(ip!.walkId, 'w-7')
+  assert.equal(ip!.coverage.walked, 2)
+  assert.equal(ip!.coverage.total, 4)
+  assert.equal(ip!.flagged, 1)
+  // It is a READ (GET), and it carries the catalogueId so the server scopes to the right catalogue.
+  const call = calls.find((c) => c.url.includes('/current'))!
+  assert.equal(call.method, 'GET')
+  assert.equal(new URL(call.url, 'http://x').searchParams.get('catalogueId'), 'trial-wizard')
+})
+
+test('current() returns null when nothing is under way', async () => {
+  const { impl } = mockFetch({ 'GET /api/walk/current': { inProgress: null } })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  assert.equal(await a.current(), null)
+})

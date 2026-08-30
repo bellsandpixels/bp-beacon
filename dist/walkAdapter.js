@@ -21,6 +21,14 @@ export function createStubWalkAdapter(catalogue, opts = {}) {
         },
         identity: async () => identity(),
         available: async () => ({ offered: true, build, env, catalogueId: catalogue.catalogueId }),
+        current: async () => {
+            // In-memory in-progress = any walked surface or held flag not yet submitted. No persisted walkId until
+            // submit, so a synthetic id stands in; the hub only reads coverage/flagged for the Resume affordance.
+            if (!Object.keys(state.walked).length && !Object.keys(state.defects).length)
+                return null;
+            const v = deriveVerdict(catalogue, state);
+            return { walkId: 'stub-current', build, env, coverage: { walked: v.walked, total: v.total }, flagged: v.defects };
+        },
         start: async () => ({ walked: { ...state.walked }, defects: { ...state.defects } }),
         markWalked: async (surfaceKey, walked) => {
             if (walked)

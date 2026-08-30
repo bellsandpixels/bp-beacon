@@ -10,6 +10,7 @@ import type {
   WalkAdapter,
   WalkAvailability,
   WalkIdentity,
+  WalkInProgress,
   WalkIssue,
   WalkState,
   WalkSummary,
@@ -59,6 +60,15 @@ interface IssueResponse {
   status?: WalkIssue['status']
   resolvedBuild?: string
   build?: string
+}
+interface CurrentResponse {
+  inProgress?: {
+    walkId?: string
+    build?: string
+    env?: string
+    coverage?: { walked?: number; total?: number }
+    flagged?: number
+  } | null
 }
 
 function mapSummary(r: SummaryResponse): WalkSummary {
@@ -135,6 +145,20 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
       const id = await identity()
       if (!id.authenticated) return null
       return { offered: true, build: cfg.build ?? '', env: cfg.env ?? '', catalogueId: cfg.catalogueId }
+    },
+    current: async (): Promise<WalkInProgress | null> => {
+      // Read-only: the caller's in-progress walk for THIS catalogue. Never creates one (unlike /start), so
+      // asking "do I have a walk under way?" never forks a walk. A missing/empty walkId -> nothing under way.
+      const r = await getJson<CurrentResponse>(`/current?catalogueId=${encodeURIComponent(cfg.catalogueId)}`)
+      const ip = r.inProgress
+      if (!ip || !ip.walkId) return null
+      return {
+        walkId: ip.walkId,
+        build: ip.build ?? '',
+        env: ip.env ?? '',
+        coverage: { walked: ip.coverage?.walked ?? 0, total: ip.coverage?.total ?? 0 },
+        flagged: ip.flagged ?? 0,
+      }
     },
     start: async (): Promise<WalkState> => {
       const r = await postJson<StartResponse>('/start', {
