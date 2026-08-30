@@ -77,6 +77,21 @@ test('an action before start() throws (no walkId)', async () => {
   await assert.rejects(() => a.markWalked('signin', true), /start\(\) must be called/)
 })
 
+test('identity() probes the ORIGIN-ABSOLUTE identity endpoint, not <base>/api/me', async () => {
+  const { impl, calls } = mockFetch({
+    'GET /api/me': { authenticated: true, name: 'Priya' },
+  })
+  // No resolveIdentity: the adapter probes identityEndpoint (default /api/me) directly. It must fetch
+  // "/api/me", NOT "<base>/api/me" (= "/api/walk/api/me", which the forwarder 404s -> always unauthenticated).
+  const a = createWalkAdapter({ endpoint: '/api/walk', cohortId: base.cohortId, catalogueId: 'trial-wizard', fetchImpl: impl })
+  const id = await a.identity()
+  assert.equal(id.authenticated, true)
+  assert.equal(id.name, 'Priya')
+  const call = calls.find((c) => c.url.includes('/api/me'))
+  assert.ok(call, 'fetched the identity endpoint')
+  assert.equal(new URL(call!.url, 'http://x').pathname, '/api/me', 'origin-absolute, not /api/walk/api/me')
+})
+
 test('listMine / listMyIssues map the portal shapes', async () => {
   const { impl } = mockFetch({
     'GET /api/walk/mine': { walks: [{ walkId: 'w-1', build: '0.5.1900', env: 'uat', coverage: { walked: 4, total: 4 }, flagged: 0 }] },

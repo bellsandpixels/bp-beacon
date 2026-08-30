@@ -60,7 +60,13 @@ export function createWalkAdapter(cfg) {
         if (cfg.resolveIdentity)
             return cfg.resolveIdentity();
         try {
-            const me = await getJson(identityUrl);
+            // identityEndpoint (default "/api/me") is an ORIGIN-ABSOLUTE path (the host's session endpoint), NOT
+            // under the walk `base`: fetch it directly so it never becomes "<base>/api/me" (a same-origin forwarder
+            // base like "/api/walk" would otherwise turn it into "/api/walk/api/me" and 404 -> always unauthenticated).
+            const res = await doFetch(identityUrl, { credentials: 'include' });
+            const me = (await res.json().catch(() => ({})));
+            if (!res.ok)
+                return { authenticated: false };
             const authenticated = me.authenticated ?? !!me.contactId;
             return { authenticated, name: authenticated ? (me.name ?? me.displayName) : undefined };
         }
