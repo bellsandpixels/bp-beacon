@@ -8,13 +8,17 @@
 // and live wiring land in Phase B. See the approved Beacon walk mocks.
 
 import { useCallback, useEffect, useState } from 'react'
-import type { WalkAdapter, WalkAvailability, WalkInProgress, WalkSummary, WalkIssue, WalkIdentity } from './walkTypes.js'
+import type { WalkAdapter, WalkAssignmentSummary, WalkAvailability, WalkInProgress, WalkSummary, WalkIssue, WalkIdentity } from './walkTypes.js'
 
 export interface WalkPaneProps {
   adapter: WalkAdapter
   // Open the assume-pass walk surface for the offered build (the host renders it; the surface calls the
   // adapter's markWalked/flag/submit). Omitted in the scaffold renders a disabled Start.
   onStartWalk?: (availability: WalkAvailability) => void
+  // B2: launch a SPECIFIC assigned walk from its To-do card (the host resolves the assignment's catalogue and
+  // starts the walk with its assignmentId, so the completed walk clears the card and advances the stage).
+  // Omitted -> the assigned cards render without a Start (display-only, the pre-B2 behavior).
+  onStartAssignment?: (assignment: WalkAssignmentSummary) => void
 }
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
@@ -51,12 +55,13 @@ function Zone({ label, children }: { label: string; children: React.ReactNode })
   )
 }
 
-export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
+export function WalkPane({ adapter, onStartWalk, onStartAssignment }: WalkPaneProps) {
   const [identity, setIdentity] = useState<WalkIdentity | null>(null)
   const [availability, setAvailability] = useState<WalkAvailability | null>(null)
   const [inProgress, setInProgress] = useState<WalkInProgress | null>(null)
   const [completed, setCompleted] = useState<WalkSummary[]>([])
   const [issues, setIssues] = useState<WalkIssue[]>([])
+  const [assigned, setAssigned] = useState<WalkAssignmentSummary[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -64,7 +69,7 @@ export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
     setBusy(true)
     setError(null)
     try {
-      const [avail, current, mine, myIssues] = await Promise.all([
+      const [avail, current, mine, myIssues, assignedList] = await Promise.all([
         adapter.available(),
         // Additive-only: the in-progress read just decides Start vs Resume, so its failure must degrade to
         // "Start walk", never blank the hub. Isolate it (unlike the other three, which gate the hub) so a
@@ -72,11 +77,15 @@ export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
         adapter.current().catch(() => null),
         adapter.listMine(),
         adapter.listMyIssues(),
+        // Slice 4c: the assigned-walks list is OPTIONAL + isolated (like current()), so an adapter without
+        // listAssigned, or a 404 on /available, degrades to no assigned list rather than blanking the hub.
+        adapter.listAssigned ? adapter.listAssigned().catch(() => []) : Promise.resolve([] as WalkAssignmentSummary[]),
       ])
       setAvailability(avail)
       setInProgress(current)
       setCompleted(mine)
       setIssues(myIssues)
+      setAssigned(assignedList)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your walks.')
     } finally {
@@ -161,6 +170,49 @@ export function WalkPane({ adapter, onStartWalk }: WalkPaneProps) {
       {error ? <p style={{ margin: 0, color: v('error', '#9B251B'), fontSize: 13 }}>{error}</p> : null}
 
       <Zone label="To do">
+        {/* Slice 4c: the tester's ASSIGNED walks (from listAssigned -> GET /api/walk/available), the
+            personalized "what is assigned to me" list. Rendered above the current-build launch card; hidden
+            when the adapter has no listAssigned or the tester has none open. */}
+        {assigned.length ? (
+          <div style={{ display: 'grid', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, opacity: 0.6 }}>Assigned to you ({assigned.length})</span>
+            {assigned.map((a) => (
+              <div
+                key={a.id}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13 }}>{a.catalogueId}</div>
+                  <div style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }}>
+                    {a.build}
+                    {a.env ? ` (${a.env})` : ''}
+                    {typeof a.ring === 'number' ? ` · ring ${a.ring}` : ''}
+                    {a.status ? ` · ${a.status}` : ''}
+                  </div>
+                </div>
+                {/* B2: launch THIS assignment's walk. Hidden (display-only) when the host wires no
+                    onStartAssignment, so a scaffold / pre-B2 host keeps the old behavior. */}
+                {onStartAssignment ? (
+                  <button
+                    onClick={() => onStartAssignment(a)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: v('radius', '8px'),
+                      border: 'none',
+                      background: v('accent', '#9B251B'),
+                      color: v('accent-fg', '#fff'),
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Start walk
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {availability?.offered ? (
           <div
             style={{

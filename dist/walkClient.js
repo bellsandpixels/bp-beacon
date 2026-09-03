@@ -5,6 +5,16 @@
 // backend-agnostic: the host supplies the endpoint (a same-origin forwarder, e.g. "/api/walk", or the
 // portal URL directly) plus how the tester is authenticated (the portal magic-link). This is the ONE
 // client implementation a portal-backed product wires once; the stub (createStubWalkAdapter) is for demos.
+function mapAssignment(a) {
+    return {
+        id: a.id ?? '',
+        catalogueId: a.catalogueId ?? '',
+        build: a.build ?? '',
+        env: a.env,
+        ring: a.ring,
+        status: a.status,
+    };
+}
 function mapSummary(r) {
     return {
         walkId: r.walkId ?? '',
@@ -98,13 +108,18 @@ export function createWalkAdapter(cfg) {
                 flagged: ip.flagged ?? 0,
             };
         },
-        start: async () => {
+        start: async (opts) => {
+            // Default: this adapter's own (current-build) catalogue. With opts (B2), launch a SPECIFIC assigned
+            // walk: the assignment's catalogue/build/env/total override the adapter default, and assignmentId is
+            // sent so the backend binds bp_WalkAssignmentId (B1) - the link that closes the loop. assignmentId is
+            // included ONLY when present, so a plain current-build start is byte-for-byte the previous request.
             const r = await postJson('/start', {
                 cohortId: cfg.cohortId,
-                catalogueId: cfg.catalogueId,
-                build: cfg.build,
-                env: cfg.env,
-                total: cfg.total,
+                catalogueId: opts?.catalogueId ?? cfg.catalogueId,
+                build: opts?.build ?? cfg.build,
+                env: opts?.env ?? cfg.env,
+                total: opts?.total ?? cfg.total,
+                ...(opts?.assignmentId ? { assignmentId: opts.assignmentId } : {}),
             });
             walkId = r.walkId;
             return { walked: r.walked ?? {}, defects: r.defects ?? {} };
@@ -136,6 +151,12 @@ export function createWalkAdapter(cfg) {
         listMyIssues: async () => {
             const r = await getJson('/issues');
             return (r.issues ?? []).map(mapIssue);
+        },
+        // The tester's ASSIGNED walks (Slice 4c): the cohort's open assignments minus the completed ones. The
+        // server enforces the cohort scope; this just maps the list. A missing/empty response -> no assignments.
+        listAssigned: async () => {
+            const r = await getJson('/available');
+            return (r.assignments ?? []).map(mapAssignment);
         },
     };
 }

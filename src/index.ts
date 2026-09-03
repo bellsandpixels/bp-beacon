@@ -39,8 +39,10 @@ export type {
   WalkIssue,
   WalkIdentity,
   WalkAvailability,
+  WalkAssignmentSummary,
   WalkInProgress,
   WalkAdapter,
+  WalkStartOptions,
 } from './walkTypes.js'
 export { WalkPane, type WalkPaneProps } from './WalkPane.js'
 export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js'
