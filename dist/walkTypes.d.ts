@@ -57,6 +57,14 @@ export interface WalkAvailability {
     env: string;
     catalogueId: string;
 }
+export interface WalkAssignmentSummary {
+    id: string;
+    catalogueId: string;
+    build: string;
+    env?: string;
+    ring?: number;
+    status?: string;
+}
 export interface WalkInProgress {
     walkId: string;
     build: string;
@@ -67,12 +75,19 @@ export interface WalkInProgress {
     };
     flagged: number;
 }
+export interface WalkStartOptions {
+    assignmentId?: string;
+    catalogueId?: string;
+    build?: string;
+    env?: string;
+    total?: number;
+}
 export interface WalkAdapter {
     authenticate: () => Promise<WalkIdentity>;
     identity: () => Promise<WalkIdentity>;
     available: () => Promise<WalkAvailability | null>;
     current: () => Promise<WalkInProgress | null>;
-    start: () => Promise<WalkState>;
+    start: (opts?: WalkStartOptions) => Promise<WalkState>;
     markWalked: (surfaceKey: string, walked: boolean) => Promise<void>;
     flag: (input: {
         checkRef: number;
@@ -85,4 +100,5 @@ export interface WalkAdapter {
     submit: () => Promise<WalkSummary>;
     listMine: () => Promise<WalkSummary[]>;
     listMyIssues: () => Promise<WalkIssue[]>;
+    listAssigned?: () => Promise<WalkAssignmentSummary[]>;
 }

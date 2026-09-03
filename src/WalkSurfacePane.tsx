@@ -6,7 +6,7 @@
 // the assume-pass rules (kept in step with the bp-qa record format).
 
 import { useEffect, useMemo, useState } from 'react'
-import type { ValidationCatalogue, WalkAdapter, WalkState } from './walkTypes.js'
+import type { ValidationCatalogue, WalkAdapter, WalkStartOptions, WalkState } from './walkTypes.js'
 import { surfacesOf, deriveVerdict } from './walkVerdict.js'
 
 export interface WalkSurfacePaneProps {
@@ -14,12 +14,16 @@ export interface WalkSurfacePaneProps {
   adapter: WalkAdapter
   build?: string // shown in the header; usually availability.build
   env?: string
+  // B2: launch a SPECIFIC assigned walk. Passed straight to adapter.start(), so the walk is created linked to
+  // its bp_walkassignment (assignmentId) against this catalogue. Omitted -> the adapter's default current-build
+  // start. Included in the start effect's deps so re-launching against a new assignment restarts the walk.
+  startOpts?: WalkStartOptions
   onDone?: (summary: { walkId: string }) => void
 }
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
 
-export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }: WalkSurfacePaneProps) {
+export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone }: WalkSurfacePaneProps) {
   const [state, setState] = useState<WalkState>({ walked: {}, defects: {} })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,14 +36,14 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }: Walk
     let live = true
     setBusy(true)
     adapter
-      .start()
+      .start(startOpts)
       .then((s) => live && setState({ walked: s.walked || {}, defects: s.defects || {} }))
       .catch((e) => live && setError(e instanceof Error ? e.message : 'Could not start the walk.'))
       .finally(() => live && setBusy(false))
     return () => {
       live = false
     }
-  }, [adapter])
+  }, [adapter, startOpts])
 
   async function toggleWalked(surfaceKey: string) {
     const next = !state.walked[surfaceKey]

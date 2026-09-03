@@ -127,3 +127,44 @@ test('current() returns null when nothing is under way', async () => {
   const a = createWalkAdapter({ ...base, fetchImpl: impl })
   assert.equal(await a.current(), null)
 })
+
+// ---- B2: assignment-aware start ----
+
+test('start(opts) launches a SPECIFIC assignment: sends assignmentId + the catalogue override (B2)', async () => {
+  const { impl, calls } = mockFetch({ 'POST /api/walk/start': { walkId: 'w-2', walked: {}, defects: {} } })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  await a.start({ assignmentId: 'a-guid', catalogueId: 'trial-access', build: '0.5.2049', total: 7 })
+  const body = calls.find((c) => c.url.endsWith('/start'))!.body as Record<string, unknown>
+  assert.equal(body.assignmentId, 'a-guid')
+  assert.equal(body.catalogueId, 'trial-access') // the ASSIGNMENT's catalogue, not the adapter default
+  assert.equal(body.build, '0.5.2049')
+  assert.equal(body.total, 7)
+})
+
+test('start() with no opts sends NO assignmentId and the adapter default context (unchanged, B2)', async () => {
+  const { impl, calls } = mockFetch({ 'POST /api/walk/start': { walkId: 'w-3', walked: {}, defects: {} } })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  await a.start()
+  const body = calls.find((c) => c.url.endsWith('/start'))!.body as Record<string, unknown>
+  assert.ok(!('assignmentId' in body), 'no assignmentId on a plain start')
+  assert.equal(body.catalogueId, 'trial-wizard') // the adapter default
+})
+
+// ---- Slice 4c: listAssigned ----
+
+test('listAssigned maps GET /available to the assignment summaries (Slice 4c)', async () => {
+  const { impl, calls } = mockFetch({
+    'GET /api/walk/available': {
+      assignments: [{ id: 'a-1', catalogueId: 'trial-access', build: '0.5.2049', env: 'prod', ring: 0, status: 'published' }],
+    },
+  })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  const assigned = await a.listAssigned!()
+  assert.equal(assigned.length, 1)
+  assert.equal(assigned[0].id, 'a-1')
+  assert.equal(assigned[0].catalogueId, 'trial-access')
+  assert.equal(assigned[0].build, '0.5.2049')
+  assert.equal(assigned[0].env, 'prod')
+  assert.equal(assigned[0].status, 'published')
+  assert.equal(calls.find((c) => c.url.includes('/available'))!.method, 'GET')
+})

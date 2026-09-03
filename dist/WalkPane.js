@@ -30,19 +30,20 @@ function Zone({ label, children }) {
                     opacity: 0.65,
                 }, children: label }), children] }));
 }
-export function WalkPane({ adapter, onStartWalk }) {
+export function WalkPane({ adapter, onStartWalk, onStartAssignment }) {
     const [identity, setIdentity] = useState(null);
     const [availability, setAvailability] = useState(null);
     const [inProgress, setInProgress] = useState(null);
     const [completed, setCompleted] = useState([]);
     const [issues, setIssues] = useState([]);
+    const [assigned, setAssigned] = useState([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
     const loadHub = useCallback(async () => {
         setBusy(true);
         setError(null);
         try {
-            const [avail, current, mine, myIssues] = await Promise.all([
+            const [avail, current, mine, myIssues, assignedList] = await Promise.all([
                 adapter.available(),
                 // Additive-only: the in-progress read just decides Start vs Resume, so its failure must degrade to
                 // "Start walk", never blank the hub. Isolate it (unlike the other three, which gate the hub) so a
@@ -50,11 +51,15 @@ export function WalkPane({ adapter, onStartWalk }) {
                 adapter.current().catch(() => null),
                 adapter.listMine(),
                 adapter.listMyIssues(),
+                // Slice 4c: the assigned-walks list is OPTIONAL + isolated (like current()), so an adapter without
+                // listAssigned, or a 404 on /available, degrades to no assigned list rather than blanking the hub.
+                adapter.listAssigned ? adapter.listAssigned().catch(() => []) : Promise.resolve([]),
             ]);
             setAvailability(avail);
             setInProgress(current);
             setCompleted(mine);
             setIssues(myIssues);
+            setAssigned(assignedList);
         }
         catch (e) {
             setError(e instanceof Error ? e.message : 'Could not load your walks.');
@@ -118,24 +123,33 @@ export function WalkPane({ adapter, onStartWalk }) {
     if (!identity || (busy && !completed.length && !issues.length && !availability)) {
         return _jsx("div", { style: base, children: _jsx("span", { style: { opacity: 0.6, fontSize: 13 }, children: "Loading your walk..." }) });
     }
-    return (_jsxs("div", { style: base, children: [error ? _jsx("p", { style: { margin: 0, color: v('error', '#9B251B'), fontSize: 13 }, children: error }) : null, _jsx(Zone, { label: "To do", children: availability?.offered ? (_jsxs("div", { style: {
-                        border: `1px solid ${v('border', '#d0d0d0')}`,
-                        borderLeft: `3px solid ${v('accent', '#9B251B')}`,
-                        borderRadius: v('radius', '10px'),
-                        padding: 12,
-                        display: 'grid',
-                        gap: 8,
-                    }, children: [_jsx("strong", { style: { fontFamily: v('serif', 'inherit') }, children: inProgress ? 'Resume your walk' : 'Walk this build' }), _jsxs("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.8 }, children: [(inProgress?.build || availability.build), " (", inProgress?.env || availability.env, ")"] }), inProgress ? (_jsxs("span", { style: { fontSize: 12, opacity: 0.75 }, children: ["In progress:", ' ', inProgress.coverage.total > 0
-                                    ? `${inProgress.coverage.walked} / ${inProgress.coverage.total} walked`
-                                    : `${inProgress.coverage.walked} walked`, inProgress.flagged ? ` · ${inProgress.flagged} flagged` : '', " \u00B7 picks up where you left off"] })) : null, _jsx("button", { onClick: () => (onStartWalk && availability ? onStartWalk(availability) : undefined), disabled: !onStartWalk, style: {
-                                padding: '6px 12px',
-                                borderRadius: v('radius', '8px'),
-                                border: 'none',
-                                background: onStartWalk ? v('accent', '#9B251B') : v('border', '#d0d0d0'),
-                                color: v('accent-fg', '#fff'),
-                                cursor: onStartWalk ? 'pointer' : 'not-allowed',
-                                justifySelf: 'start',
-                            }, children: inProgress ? 'Resume walk' : 'Start walk' })] })) : (_jsx("span", { style: { fontSize: 13, opacity: 0.6 }, children: "No walk is offered for this build." })) }), _jsx(Zone, { label: "Completed", children: completed.length ? (completed.map((w) => (_jsx("div", { style: { display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }, children: _jsxs("div", { style: { flex: 1 }, children: [_jsx("div", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 13 }, children: w.build }), _jsxs("div", { style: { fontSize: 11, opacity: 0.6 }, children: [w.coverage.walked, " / ", w.coverage.total, " walked", w.flagged ? ` · ${w.flagged} flagged` : ''] })] }) }, w.walkId)))) : (_jsx("span", { style: { fontSize: 13, opacity: 0.6 }, children: "No completed walks yet." })) }), _jsx(Zone, { label: "My issues", children: issues.length ? (issues.map((it) => (_jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }, children: [_jsxs("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }, children: ["#", it.checkRef] }), _jsxs("div", { style: { flex: 1 }, children: [_jsx("div", { style: { fontSize: 13 }, children: it.title }), _jsxs("div", { style: { fontSize: 11, opacity: 0.6 }, children: ["raised on ", it.build] })] }), _jsx("span", { style: {
+    return (_jsxs("div", { style: base, children: [error ? _jsx("p", { style: { margin: 0, color: v('error', '#9B251B'), fontSize: 13 }, children: error }) : null, _jsxs(Zone, { label: "To do", children: [assigned.length ? (_jsxs("div", { style: { display: 'grid', gap: 8, marginBottom: 4 }, children: [_jsxs("span", { style: { fontSize: 11, opacity: 0.6 }, children: ["Assigned to you (", assigned.length, ")"] }), assigned.map((a) => (_jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }, children: [_jsxs("div", { style: { flex: 1 }, children: [_jsx("div", { style: { fontSize: 13 }, children: a.catalogueId }), _jsxs("div", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }, children: [a.build, a.env ? ` (${a.env})` : '', typeof a.ring === 'number' ? ` · ring ${a.ring}` : '', a.status ? ` · ${a.status}` : ''] })] }), onStartAssignment ? (_jsx("button", { onClick: () => onStartAssignment(a), style: {
+                                            padding: '5px 12px',
+                                            borderRadius: v('radius', '8px'),
+                                            border: 'none',
+                                            background: v('accent', '#9B251B'),
+                                            color: v('accent-fg', '#fff'),
+                                            cursor: 'pointer',
+                                            fontSize: 12,
+                                            whiteSpace: 'nowrap',
+                                        }, children: "Start walk" })) : null] }, a.id)))] })) : null, availability?.offered ? (_jsxs("div", { style: {
+                            border: `1px solid ${v('border', '#d0d0d0')}`,
+                            borderLeft: `3px solid ${v('accent', '#9B251B')}`,
+                            borderRadius: v('radius', '10px'),
+                            padding: 12,
+                            display: 'grid',
+                            gap: 8,
+                        }, children: [_jsx("strong", { style: { fontFamily: v('serif', 'inherit') }, children: inProgress ? 'Resume your walk' : 'Walk this build' }), _jsxs("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.8 }, children: [(inProgress?.build || availability.build), " (", inProgress?.env || availability.env, ")"] }), inProgress ? (_jsxs("span", { style: { fontSize: 12, opacity: 0.75 }, children: ["In progress:", ' ', inProgress.coverage.total > 0
+                                        ? `${inProgress.coverage.walked} / ${inProgress.coverage.total} walked`
+                                        : `${inProgress.coverage.walked} walked`, inProgress.flagged ? ` · ${inProgress.flagged} flagged` : '', " \u00B7 picks up where you left off"] })) : null, _jsx("button", { onClick: () => (onStartWalk && availability ? onStartWalk(availability) : undefined), disabled: !onStartWalk, style: {
+                                    padding: '6px 12px',
+                                    borderRadius: v('radius', '8px'),
+                                    border: 'none',
+                                    background: onStartWalk ? v('accent', '#9B251B') : v('border', '#d0d0d0'),
+                                    color: v('accent-fg', '#fff'),
+                                    cursor: onStartWalk ? 'pointer' : 'not-allowed',
+                                    justifySelf: 'start',
+                                }, children: inProgress ? 'Resume walk' : 'Start walk' })] })) : (_jsx("span", { style: { fontSize: 13, opacity: 0.6 }, children: "No walk is offered for this build." }))] }), _jsx(Zone, { label: "Completed", children: completed.length ? (completed.map((w) => (_jsx("div", { style: { display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }, children: _jsxs("div", { style: { flex: 1 }, children: [_jsx("div", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 13 }, children: w.build }), _jsxs("div", { style: { fontSize: 11, opacity: 0.6 }, children: [w.coverage.walked, " / ", w.coverage.total, " walked", w.flagged ? ` · ${w.flagged} flagged` : ''] })] }) }, w.walkId)))) : (_jsx("span", { style: { fontSize: 13, opacity: 0.6 }, children: "No completed walks yet." })) }), _jsx(Zone, { label: "My issues", children: issues.length ? (issues.map((it) => (_jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }, children: [_jsxs("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }, children: ["#", it.checkRef] }), _jsxs("div", { style: { flex: 1 }, children: [_jsx("div", { style: { fontSize: 13 }, children: it.title }), _jsxs("div", { style: { fontSize: 11, opacity: 0.6 }, children: ["raised on ", it.build] })] }), _jsx("span", { style: {
                                 fontFamily: v('mono', 'ui-monospace, monospace'),
                                 fontSize: 11,
                                 fontWeight: 700,

@@ -8,10 +8,12 @@
 
 import type {
   WalkAdapter,
+  WalkAssignmentSummary,
   WalkAvailability,
   WalkIdentity,
   WalkInProgress,
   WalkIssue,
+  WalkStartOptions,
   WalkState,
   WalkSummary,
 } from './walkTypes.js'
@@ -69,6 +71,26 @@ interface CurrentResponse {
     coverage?: { walked?: number; total?: number }
     flagged?: number
   } | null
+}
+// GET /available (Slice 4b): the caller's open cohort assignments. `build` is the version label (the endpoint
+// $expands the build record); `env` is the canonical sandbox|prod.
+interface AssignmentResponse {
+  id?: string
+  catalogueId?: string
+  build?: string
+  env?: string
+  ring?: number
+  status?: string
+}
+function mapAssignment(a: AssignmentResponse): WalkAssignmentSummary {
+  return {
+    id: a.id ?? '',
+    catalogueId: a.catalogueId ?? '',
+    build: a.build ?? '',
+    env: a.env,
+    ring: a.ring,
+    status: a.status,
+  }
 }
 
 function mapSummary(r: SummaryResponse): WalkSummary {
@@ -160,13 +182,18 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
         flagged: ip.flagged ?? 0,
       }
     },
-    start: async (): Promise<WalkState> => {
+    start: async (opts?: WalkStartOptions): Promise<WalkState> => {
+      // Default: this adapter's own (current-build) catalogue. With opts (B2), launch a SPECIFIC assigned
+      // walk: the assignment's catalogue/build/env/total override the adapter default, and assignmentId is
+      // sent so the backend binds bp_WalkAssignmentId (B1) - the link that closes the loop. assignmentId is
+      // included ONLY when present, so a plain current-build start is byte-for-byte the previous request.
       const r = await postJson<StartResponse>('/start', {
         cohortId: cfg.cohortId,
-        catalogueId: cfg.catalogueId,
-        build: cfg.build,
-        env: cfg.env,
-        total: cfg.total,
+        catalogueId: opts?.catalogueId ?? cfg.catalogueId,
+        build: opts?.build ?? cfg.build,
+        env: opts?.env ?? cfg.env,
+        total: opts?.total ?? cfg.total,
+        ...(opts?.assignmentId ? { assignmentId: opts.assignmentId } : {}),
       })
       walkId = r.walkId
       return { walked: r.walked ?? {}, defects: r.defects ?? {} }
@@ -198,6 +225,12 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
     listMyIssues: async (): Promise<WalkIssue[]> => {
       const r = await getJson<{ issues?: IssueResponse[] }>('/issues')
       return (r.issues ?? []).map(mapIssue)
+    },
+    // The tester's ASSIGNED walks (Slice 4c): the cohort's open assignments minus the completed ones. The
+    // server enforces the cohort scope; this just maps the list. A missing/empty response -> no assignments.
+    listAssigned: async (): Promise<WalkAssignmentSummary[]> => {
+      const r = await getJson<{ assignments?: AssignmentResponse[] }>('/available')
+      return (r.assignments ?? []).map(mapAssignment)
     },
   }
 }

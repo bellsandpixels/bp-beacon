@@ -8,7 +8,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useEffect, useMemo, useState } from 'react';
 import { surfacesOf, deriveVerdict } from './walkVerdict.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
-export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }) {
+export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone }) {
     const [state, setState] = useState({ walked: {}, defects: {} });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
@@ -19,14 +19,14 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, onDone }) {
         let live = true;
         setBusy(true);
         adapter
-            .start()
+            .start(startOpts)
             .then((s) => live && setState({ walked: s.walked || {}, defects: s.defects || {} }))
             .catch((e) => live && setError(e instanceof Error ? e.message : 'Could not start the walk.'))
             .finally(() => live && setBusy(false));
         return () => {
             live = false;
         };
-    }, [adapter]);
+    }, [adapter, startOpts]);
     async function toggleWalked(surfaceKey) {
         const next = !state.walked[surfaceKey];
         // Unwalking a surface also clears its flags, so a counted defect can never survive on a NOT-WALKED

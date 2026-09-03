@@ -85,5 +85,10 @@ export function createStubWalkAdapter(catalogue, opts = {}) {
         },
         listMine: async () => [...completed],
         listMyIssues: async () => [...issues],
+        // Slice 4c: a single mock assignment for the current catalogue/build, so the "To do" zone renders the
+        // assigned list in a demo / preview without a backend.
+        listAssigned: async () => [
+            { id: 'stub-assignment-1', catalogueId: catalogue.catalogueId, build, env, ring: 0, status: 'published' },
+        ],
     };
 }
