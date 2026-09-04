@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import type { FeedbackAdapter, FeedbackKind, BeaconContext } from './types.js'
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, validateAttachmentFile } from './attachments.js'
 
 export interface FeedbackPaneProps {
   adapter: FeedbackAdapter
@@ -44,16 +45,74 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
   const [consent, setConsent] = useState(true)
   const [showIncluded, setShowIncluded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{ reference?: string } | null>(null)
+  // Reporter-attached images (cp-beacon-attachments). Only offered when the adapter can upload (a
+  // ticketEndpoint was configured). Each holds a stable object-URL for the preview, revoked on remove.
+  const [attachments, setAttachments] = useState<{ file: File; url: string }[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const canAttach = typeof adapter.uploadAttachments === 'function'
 
   const canSend = title.trim().length >= 3 && !busy
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? [])
+    e.target.value = '' // let the reporter re-pick the same file after a remove
+    let err: string | null = null
+    const additions: { file: File; url: string }[] = []
+    for (const f of picked) {
+      if (attachments.length + additions.length >= MAX_ATTACHMENTS) {
+        err = `You can attach up to ${MAX_ATTACHMENTS} images.`
+        break
+      }
+      const v = validateAttachmentFile(f)
+      if (v) {
+        err = v
+        continue
+      }
+      additions.push({ file: f, url: URL.createObjectURL(f) })
+    }
+    if (additions.length) setAttachments((cur) => [...cur, ...additions])
+    setAttachError(err)
+  }
+
+  function removeAttachment(i: number) {
+    setAttachments((cur) => {
+      const a = cur[i]
+      if (a) URL.revokeObjectURL(a.url)
+      return cur.filter((_, j) => j !== i)
+    })
+    setAttachError(null)
+  }
 
   async function send() {
     setBusy(true)
     setError(null)
     try {
-      const result = await adapter.submit({ kind, title: title.trim(), details: details.trim(), consent, contact: contact.trim() })
+      // Two-phase attachments: upload first (best-effort), then submit with the refs + the shared id so the
+      // envelope and the uploaded blobs match. A failed upload is skipped by the adapter; the report still files.
+      let attachmentRefs: { id: string; contentType: string; bytes: number }[] | undefined
+      let clientReportId: string | undefined
+      if (attachments.length && adapter.uploadAttachments) {
+        setUploading(true)
+        try {
+          const up = await adapter.uploadAttachments(attachments.map((a) => a.file))
+          attachmentRefs = up.attachments
+          clientReportId = up.clientReportId
+        } finally {
+          setUploading(false)
+        }
+      }
+      const result = await adapter.submit({
+        kind,
+        title: title.trim(),
+        details: details.trim(),
+        consent,
+        contact: contact.trim(),
+        attachments: attachmentRefs,
+        clientReportId,
+      })
       setDone({ reference: result.reference })
       onDone?.(result)
     } catch (e) {
@@ -135,6 +194,44 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
         ) : null}
       </label>
 
+      {canAttach ? (
+        <div style={{ display: 'grid', gap: 6 }}>
+          <span style={{ fontSize: 13, opacity: 0.8 }}>Add a screenshot (optional)</span>
+          {attachments.length ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {attachments.map((a, i) => (
+                <div key={a.url} style={{ position: 'relative', width: 64, height: 64 }}>
+                  <img
+                    src={a.url}
+                    alt={a.file.name}
+                    style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}` }}
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Remove ${a.file.name}`}
+                    onClick={() => removeAttachment(i)}
+                    style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, lineHeight: '16px', textAlign: 'center', padding: 0, borderRadius: '50%', border: 'none', background: v('accent', '#9B251B'), color: v('accent-fg', '#fff'), cursor: 'pointer', fontSize: 12 }}
+                  >
+                    &#215;
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {attachments.length < MAX_ATTACHMENTS ? (
+            <label style={{ justifySelf: 'start', fontSize: 13, color: v('accent', '#9B251B'), cursor: 'pointer' }}>
+              + Add image
+              <input type="file" accept={ATTACHMENT_ACCEPT} multiple onChange={onPick} style={{ display: 'none' }} />
+            </label>
+          ) : null}
+          <span style={{ fontSize: 11, opacity: 0.6 }}>
+            PNG, JPEG, or WebP, up to 10 MB each. Attachments can contain personal information, so only include
+            what you are comfortable sharing.
+          </span>
+          {attachError ? <span style={{ fontSize: 12, color: v('error', '#9B251B') }}>{attachError}</span> : null}
+        </div>
+      ) : null}
+
       <div style={{ display: 'grid', gap: 4 }}>
         <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
@@ -171,7 +268,7 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
           justifySelf: 'start',
         }}
       >
-        {busy ? 'Sending...' : 'Send'}
+        {uploading ? 'Uploading...' : busy ? 'Sending...' : 'Send'}
       </button>
     </div>
   )

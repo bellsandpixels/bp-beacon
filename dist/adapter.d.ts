@@ -4,6 +4,7 @@ export interface BeaconAdapterConfig extends WebContextConfig {
     endpoint: string;
     product: string;
     resolveIdentity?: () => string | undefined;
+    ticketEndpoint?: string;
     fetchImpl?: typeof fetch;
 }
 export declare function buildEnvelope(cfg: BeaconAdapterConfig, input: {
@@ -13,5 +14,6 @@ export declare function buildEnvelope(cfg: BeaconAdapterConfig, input: {
     consent: boolean;
     contact?: string;
     attachments?: BeaconAttachmentRef[];
+    clientReportId?: string;
 }): BeaconEnvelope;
 export declare function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter;
