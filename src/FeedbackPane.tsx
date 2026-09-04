@@ -14,6 +14,11 @@ export interface FeedbackPaneProps {
   // Gather the allow-list context to preview under "what's included" (same object the adapter sends).
   // Usually `() => gatherWebContext(cfg)`.
   gatherContext?: () => BeaconContext
+  // Host-known reporter identity for PREFILL (owner ruling R6, "both"): when the host knows who the user
+  // is, wire this and the contact field is prefilled, still editable and clearable. Resolved once on mount.
+  // The pane always sends the field's value, so wire this ON THE PANE when using it (the adapter-config
+  // resolveIdentity is only the fallback for direct submit callers).
+  resolveIdentity?: () => string | undefined
   onDone?: (result: { id: string; reference?: string }) => void
 }
 
@@ -24,10 +29,15 @@ const KINDS: { value: FeedbackKind; label: string }[] = [
   { value: 'idea', label: 'Idea' },
 ]
 
-export function FeedbackPane({ adapter, gatherContext, onDone }: FeedbackPaneProps) {
+export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }: FeedbackPaneProps) {
   const [kind, setKind] = useState<FeedbackKind>('bug')
   const [title, setTitle] = useState('')
   const [details, setDetails] = useState('')
+  // Reporter contact (R6). Prefilled once from the host-known identity when available; the reporter can
+  // edit or clear it. `prefill` is captured on mount so the "from your account" hint shows only while the
+  // field still holds the untouched prefill.
+  const [prefill] = useState(() => resolveIdentity?.() ?? '')
+  const [contact, setContact] = useState(prefill)
   // Default ON, still declinable (owner ruling 2026-08-29): diagnostics are pre-attached so a triager can
   // reproduce a report, and the reporter can untick to file a content-only report. Disclosed +
   // inspectable ("What's included?"); the D3 allow-list is unchanged (no id, no study data, ever).
@@ -43,7 +53,7 @@ export function FeedbackPane({ adapter, gatherContext, onDone }: FeedbackPanePro
     setBusy(true)
     setError(null)
     try {
-      const result = await adapter.submit({ kind, title: title.trim(), details: details.trim(), consent })
+      const result = await adapter.submit({ kind, title: title.trim(), details: details.trim(), consent, contact: contact.trim() })
       setDone({ reference: result.reference })
       onDone?.(result)
     } catch (e) {
@@ -107,6 +117,22 @@ export function FeedbackPane({ adapter, gatherContext, onDone }: FeedbackPanePro
           maxLength={5000}
           style={{ padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a'), resize: 'vertical' }}
         />
+      </label>
+
+      <label style={{ display: 'grid', gap: 4 }}>
+        <span style={{ fontSize: 13, opacity: 0.8 }}>How can we reach you? (optional)</span>
+        <input
+          type="email"
+          value={contact}
+          onChange={(e) => setContact(e.target.value)}
+          placeholder="you@example.com"
+          maxLength={200}
+          autoComplete="email"
+          style={{ padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') }}
+        />
+        {prefill.length > 0 && contact === prefill ? (
+          <span style={{ fontSize: 11, opacity: 0.6 }}>Filled from your account. Edit or clear it if you like.</span>
+        ) : null}
       </label>
 
       <div style={{ display: 'grid', gap: 4 }}>

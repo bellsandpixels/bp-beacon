@@ -12,10 +12,15 @@ const KINDS = [
     { value: 'bug', label: 'Issue' },
     { value: 'idea', label: 'Idea' },
 ];
-export function FeedbackPane({ adapter, gatherContext, onDone }) {
+export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }) {
     const [kind, setKind] = useState('bug');
     const [title, setTitle] = useState('');
     const [details, setDetails] = useState('');
+    // Reporter contact (R6). Prefilled once from the host-known identity when available; the reporter can
+    // edit or clear it. `prefill` is captured on mount so the "from your account" hint shows only while the
+    // field still holds the untouched prefill.
+    const [prefill] = useState(() => resolveIdentity?.() ?? '');
+    const [contact, setContact] = useState(prefill);
     // Default ON, still declinable (owner ruling 2026-08-29): diagnostics are pre-attached so a triager can
     // reproduce a report, and the reporter can untick to file a content-only report. Disclosed +
     // inspectable ("What's included?"); the D3 allow-list is unchanged (no id, no study data, ever).
@@ -29,7 +34,7 @@ export function FeedbackPane({ adapter, gatherContext, onDone }) {
         setBusy(true);
         setError(null);
         try {
-            const result = await adapter.submit({ kind, title: title.trim(), details: details.trim(), consent });
+            const result = await adapter.submit({ kind, title: title.trim(), details: details.trim(), consent, contact: contact.trim() });
             setDone({ reference: result.reference });
             onDone?.(result);
         }
@@ -51,7 +56,7 @@ export function FeedbackPane({ adapter, gatherContext, onDone }) {
                         background: kind === k.value ? v('accent', '#9B251B') : 'transparent',
                         color: kind === k.value ? v('accent-fg', '#fff') : v('fg', '#1a1a1a'),
                         cursor: 'pointer',
-                    }, children: k.label }, k.value))) }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Title" }), _jsx("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: kind === 'bug' ? 'What went wrong?' : "What's your idea?", maxLength: 200, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Details" }), _jsx("textarea", { value: details, onChange: (e) => setDetails(e.target.value), rows: 4, maxLength: 5000, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a'), resize: 'vertical' } })] }), _jsxs("div", { style: { display: 'grid', gap: 4 }, children: [_jsxs("label", { style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }, children: [_jsx("input", { type: "checkbox", checked: consent, onChange: (e) => setConsent(e.target.checked) }), _jsx("span", { children: "Include basic diagnostics (app version, screen, device type, OS, language) to help us investigate." })] }), gatherContext ? (_jsx("button", { type: "button", onClick: () => setShowIncluded((s) => !s), style: { justifySelf: 'start', background: 'none', border: 'none', color: v('accent', '#9B251B'), cursor: 'pointer', padding: 0, fontSize: 12 }, children: showIncluded ? 'Hide' : "What's included?" })) : null, included ? (_jsx("pre", { style: { margin: 0, fontSize: 11, opacity: 0.75, whiteSpace: 'pre-wrap', background: v('inspect-bg', '#f4f4f4'), padding: 8, borderRadius: v('radius', '8px') }, children: JSON.stringify(included, null, 2) })) : null] }), error ? _jsx("p", { style: { margin: 0, color: v('error', '#9B251B'), fontSize: 13 }, children: error }) : null, _jsx("button", { onClick: send, disabled: !canSend, style: {
+                    }, children: k.label }, k.value))) }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Title" }), _jsx("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: kind === 'bug' ? 'What went wrong?' : "What's your idea?", maxLength: 200, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Details" }), _jsx("textarea", { value: details, onChange: (e) => setDetails(e.target.value), rows: 4, maxLength: 5000, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a'), resize: 'vertical' } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "How can we reach you? (optional)" }), _jsx("input", { type: "email", value: contact, onChange: (e) => setContact(e.target.value), placeholder: "you@example.com", maxLength: 200, autoComplete: "email", style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } }), prefill.length > 0 && contact === prefill ? (_jsx("span", { style: { fontSize: 11, opacity: 0.6 }, children: "Filled from your account. Edit or clear it if you like." })) : null] }), _jsxs("div", { style: { display: 'grid', gap: 4 }, children: [_jsxs("label", { style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }, children: [_jsx("input", { type: "checkbox", checked: consent, onChange: (e) => setConsent(e.target.checked) }), _jsx("span", { children: "Include basic diagnostics (app version, screen, device type, OS, language) to help us investigate." })] }), gatherContext ? (_jsx("button", { type: "button", onClick: () => setShowIncluded((s) => !s), style: { justifySelf: 'start', background: 'none', border: 'none', color: v('accent', '#9B251B'), cursor: 'pointer', padding: 0, fontSize: 12 }, children: showIncluded ? 'Hide' : "What's included?" })) : null, included ? (_jsx("pre", { style: { margin: 0, fontSize: 11, opacity: 0.75, whiteSpace: 'pre-wrap', background: v('inspect-bg', '#f4f4f4'), padding: 8, borderRadius: v('radius', '8px') }, children: JSON.stringify(included, null, 2) })) : null] }), error ? _jsx("p", { style: { margin: 0, color: v('error', '#9B251B'), fontSize: 13 }, children: error }) : null, _jsx("button", { onClick: send, disabled: !canSend, style: {
                     padding: '8px 16px',
                     borderRadius: v('radius', '8px'),
                     border: 'none',
