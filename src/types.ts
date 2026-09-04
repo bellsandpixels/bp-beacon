@@ -90,7 +90,15 @@ export interface FeedbackAdapter {
     contact?: string
     // Optional references to already-uploaded attachment images (cp-beacon-attachments).
     attachments?: BeaconAttachmentRef[]
+    // Optional client report id. When the pane uploads attachments it FIRST mints this id (the quarantine
+    // prefix the ticket used) and passes it here, so the submit and the uploads share one id. Omit it and the
+    // adapter generates one.
+    clientReportId?: string
   }) => Promise<{ id: string; reference?: string }>
+  // Upload reporter-selected images via the two-phase flow (mint tickets, PUT each to blob), returning the
+  // shared clientReportId + the attachment references to pass to submit. Present ONLY when the adapter was
+  // built with a ticketEndpoint; the FeedbackPane shows the image picker only when this is defined.
+  uploadAttachments?: (files: File[]) => Promise<{ clientReportId: string; attachments: BeaconAttachmentRef[] }>
   list?: () => Promise<FeedbackReport[]>
   confirm?: (id: string) => Promise<void>
   reopen?: (id: string) => Promise<void>

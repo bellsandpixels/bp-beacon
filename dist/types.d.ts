@@ -45,9 +45,14 @@ export interface FeedbackAdapter {
         consent: boolean;
         contact?: string;
         attachments?: BeaconAttachmentRef[];
+        clientReportId?: string;
     }) => Promise<{
         id: string;
         reference?: string;
+    }>;
+    uploadAttachments?: (files: File[]) => Promise<{
+        clientReportId: string;
+        attachments: BeaconAttachmentRef[];
     }>;
     list?: () => Promise<FeedbackReport[]>;
     confirm?: (id: string) => Promise<void>;

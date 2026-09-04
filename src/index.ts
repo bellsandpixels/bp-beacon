@@ -23,6 +23,13 @@ export type {
 } from './types.js'
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA, type WebContextConfig } from './diagnostics.js'
 export { createBeaconAdapter, buildEnvelope, type BeaconAdapterConfig } from './adapter.js'
+export {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_IMAGE_TYPES,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS,
+  validateAttachmentFile,
+} from './attachments.js'
 export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js'
 
 // The validation walk (T1): the walk analog of feedback. The Validation-hub pane + the WalkAdapter

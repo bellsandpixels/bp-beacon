@@ -6,6 +6,7 @@
 
 import type { BeaconEnvelope, FeedbackAdapter, BeaconAttachmentRef } from './types.js'
 import { gatherWebContext, type WebContextConfig } from './diagnostics.js'
+import { MAX_ATTACHMENTS } from './attachments.js'
 
 export interface BeaconAdapterConfig extends WebContextConfig {
   // Where the envelope is POSTed. Web products use a same-origin forwarder (e.g. "/api/feedback") that
@@ -20,6 +21,10 @@ export interface BeaconAdapterConfig extends WebContextConfig {
   // It is a FALLBACK only: a contact the caller passes to submit (a string, including an explicit '' to
   // clear) always wins. Used for direct submit callers; the FeedbackPane resolves its own prefill.
   resolveIdentity?: () => string | undefined
+  // Where the attachment upload TICKETS are minted (cp-beacon-attachments): a same-origin forwarder to the
+  // portal's /api/beacon-attachment-ticket, or that endpoint directly. Set it to enable image attachments;
+  // when it is unset, the adapter exposes no uploadAttachments and the FeedbackPane hides the image picker.
+  ticketEndpoint?: string
   // Injectable for tests; defaults to the global fetch.
   fetchImpl?: typeof fetch
 }
@@ -31,7 +36,6 @@ function newClientReportId(): string | undefined {
 // Build the wire envelope. Exported so a contract test can assert its shape against the server without a
 // network call.
 const MAX_CONTACT = 200
-const MAX_ATTACHMENTS = 3
 
 export function buildEnvelope(
   cfg: BeaconAdapterConfig,
@@ -42,6 +46,7 @@ export function buildEnvelope(
     consent: boolean
     contact?: string
     attachments?: BeaconAttachmentRef[]
+    clientReportId?: string
   },
 ): BeaconEnvelope {
   const envelope: BeaconEnvelope = {
@@ -50,7 +55,9 @@ export function buildEnvelope(
     title: input.title,
     details: input.details,
     consent: input.consent,
-    clientReportId: newClientReportId(),
+    // When the pane uploaded attachments it already minted the id (the quarantine prefix); reuse it so the
+    // envelope and the uploads share one clientReportId. Otherwise generate a fresh one.
+    clientReportId: input.clientReportId ?? newClientReportId(),
     hp: '',
   }
   // Reporter identity. The caller's explicit contact wins - `??` (not `||`) means an explicit '' (the
@@ -71,7 +78,7 @@ export function buildEnvelope(
 
 export function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter {
   const doFetch = cfg.fetchImpl ?? fetch
-  return {
+  const adapter: FeedbackAdapter = {
     submit: async (input) => {
       const envelope = buildEnvelope(cfg, input)
       const res = await doFetch(cfg.endpoint, {
@@ -91,4 +98,48 @@ export function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter {
       return { id: ref ?? '', reference: ref }
     },
   }
+
+  // Attachments (cp-beacon-attachments): exposed ONLY when a ticket endpoint is configured. The two-phase
+  // upload - mint a clientReportId, request one write-only SAS per image, PUT each straight to blob -
+  // returns the shared clientReportId + the refs the pane then passes to submit. Best-effort per file: a
+  // failed upload is skipped (never throws), so the report can still be filed without that image.
+  if (cfg.ticketEndpoint) {
+    const ticketEndpoint = cfg.ticketEndpoint
+    adapter.uploadAttachments = async (files) => {
+      const clientReportId = newClientReportId()
+      if (!clientReportId || !files.length) return { clientReportId: clientReportId ?? '', attachments: [] }
+      const capped = files.slice(0, MAX_ATTACHMENTS)
+      let tickets: { attachmentId: string; url: string }[] = []
+      try {
+        const res = await doFetch(ticketEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientReportId, hp: '', files: capped.map((f) => ({ contentType: f.type, bytes: f.size })) }),
+        })
+        const data = (await res.json().catch(() => ({}))) as { tickets?: { attachmentId: string; url: string }[] }
+        tickets = res.ok ? data.tickets ?? [] : []
+      } catch {
+        return { clientReportId, attachments: [] }
+      }
+      const attachments: BeaconAttachmentRef[] = []
+      // Tickets come back in files order (the server iterates the request's files array in order).
+      for (let i = 0; i < tickets.length && i < capped.length; i++) {
+        const t = tickets[i]
+        const f = capped[i]
+        if (!t || !f) continue
+        try {
+          const put = await doFetch(t.url, {
+            method: 'PUT',
+            headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-Type': f.type },
+            body: f,
+          })
+          if (put.ok) attachments.push({ id: t.attachmentId, contentType: f.type, bytes: f.size })
+        } catch {
+          // skip a failed upload; the report can still be filed
+        }
+      }
+      return { clientReportId, attachments }
+    }
+  }
+  return adapter
 }

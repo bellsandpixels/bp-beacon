@@ -1,6 +1,7 @@
 export type { FeedbackKind, FeedbackStatus, FeedbackReport, FeedbackAdapter, BeaconContext, BeaconEnvelope, BeaconAttachmentRef, } from './types.js';
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA, type WebContextConfig } from './diagnostics.js';
 export { createBeaconAdapter, buildEnvelope, type BeaconAdapterConfig } from './adapter.js';
+export { ATTACHMENT_ACCEPT, ATTACHMENT_IMAGE_TYPES, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, validateAttachmentFile, } from './attachments.js';
 export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js';
 export type { CheckSeverity, WalkCheck, WalkSurface, WalkArea, ValidationCatalogue, WalkState, WalkSummary, WalkIssue, WalkIdentity, WalkAvailability, WalkAssignmentSummary, WalkInProgress, WalkAdapter, WalkStartOptions, } from './walkTypes.js';
 export { WalkPane, type WalkPaneProps } from './WalkPane.js';
