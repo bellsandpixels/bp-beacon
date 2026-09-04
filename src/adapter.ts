@@ -4,7 +4,7 @@
 // id, so no list/confirm/reopen and the "Your reports" view stays hidden - the same envelope the native
 // (Android/iOS) client sends directly. This is the ONE implementation the products converge onto.
 
-import type { BeaconEnvelope, FeedbackAdapter } from './types.js'
+import type { BeaconEnvelope, FeedbackAdapter, BeaconAttachmentRef } from './types.js'
 import { gatherWebContext, type WebContextConfig } from './diagnostics.js'
 
 export interface BeaconAdapterConfig extends WebContextConfig {
@@ -31,10 +31,18 @@ function newClientReportId(): string | undefined {
 // Build the wire envelope. Exported so a contract test can assert its shape against the server without a
 // network call.
 const MAX_CONTACT = 200
+const MAX_ATTACHMENTS = 3
 
 export function buildEnvelope(
   cfg: BeaconAdapterConfig,
-  input: { kind: BeaconEnvelope['kind']; title: string; details: string; consent: boolean; contact?: string },
+  input: {
+    kind: BeaconEnvelope['kind']
+    title: string
+    details: string
+    consent: boolean
+    contact?: string
+    attachments?: BeaconAttachmentRef[]
+  },
 ): BeaconEnvelope {
   const envelope: BeaconEnvelope = {
     product: cfg.product,
@@ -51,6 +59,11 @@ export function buildEnvelope(
   // Trim + cap to 200 (bp_contact's size), and attach only when something remains.
   const contact = (input.contact ?? cfg.resolveIdentity?.() ?? '').trim().slice(0, MAX_CONTACT)
   if (contact) envelope.contact = contact
+  // Attachment references (cp-beacon-attachments): pass through the already-uploaded image refs, capped at
+  // MAX_ATTACHMENTS. Only when non-empty; the server re-verifies each blob (existence, size, sniffed type).
+  if (input.attachments && input.attachments.length) {
+    envelope.attachments = input.attachments.slice(0, MAX_ATTACHMENTS)
+  }
   // Consent gate [D3]: attach the allow-list context ONLY when the reporter opts in.
   if (input.consent) envelope.context = gatherWebContext(cfg)
   return envelope

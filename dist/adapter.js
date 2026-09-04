@@ -10,6 +10,7 @@ function newClientReportId() {
 // Build the wire envelope. Exported so a contract test can assert its shape against the server without a
 // network call.
 const MAX_CONTACT = 200;
+const MAX_ATTACHMENTS = 3;
 export function buildEnvelope(cfg, input) {
     const envelope = {
         product: cfg.product,
@@ -27,6 +28,11 @@ export function buildEnvelope(cfg, input) {
     const contact = (input.contact ?? cfg.resolveIdentity?.() ?? '').trim().slice(0, MAX_CONTACT);
     if (contact)
         envelope.contact = contact;
+    // Attachment references (cp-beacon-attachments): pass through the already-uploaded image refs, capped at
+    // MAX_ATTACHMENTS. Only when non-empty; the server re-verifies each blob (existence, size, sniffed type).
+    if (input.attachments && input.attachments.length) {
+        envelope.attachments = input.attachments.slice(0, MAX_ATTACHMENTS);
+    }
     // Consent gate [D3]: attach the allow-list context ONLY when the reporter opts in.
     if (input.consent)
         envelope.context = gatherWebContext(cfg);

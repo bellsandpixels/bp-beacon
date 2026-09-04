@@ -43,6 +43,18 @@ export interface BeaconContext {
   locale: string // e.g. "en-US"
 }
 
+// A reference to ONE image the reporter attached, after it was uploaded to blob via a mint-ticket SAS
+// (cp-beacon-attachments, the two-phase upload). `id` is the attachmentId the ticket endpoint minted;
+// `contentType` / `bytes` are what the client believes it uploaded (ADVISORY - the server re-sniffs the
+// actual bytes and re-reads the size on ingest, and rejects a mismatch); `sha256` is an optional
+// client-computed hash. Images only for v1.
+export interface BeaconAttachmentRef {
+  id: string
+  contentType: string
+  bytes: number
+  sha256?: string
+}
+
 // The exact envelope POSTed to /api/beacon-signal. `hp` is the honeypot (always empty from a real client);
 // `context` rides ONLY on explicit consent; `product` is set by the host. This mirrors the native envelope.
 export interface BeaconEnvelope {
@@ -59,6 +71,9 @@ export interface BeaconEnvelope {
   // server maps it to bp_contact ("never auto-derived") and never infers it from IP/auth. Rides
   // independently of the D3 consent gate - it is primary content the reporter controls, not auto-context.
   contact?: string
+  // Optional references to reporter-attached images already uploaded to blob (cp-beacon-attachments).
+  // Rides only when non-empty; each entry is a ticket-minted id + advisory type/size the server re-verifies.
+  attachments?: BeaconAttachmentRef[]
 }
 
 // Backend-agnostic feedback adapter. The host wires submit (via createBeaconAdapter) and MAY supply the
@@ -73,6 +88,8 @@ export interface FeedbackAdapter {
     // Optional reporter contact. A string (including '') is the caller's explicit value and wins; omit it
     // entirely to let a host-configured identity resolver fill it (see BeaconAdapterConfig.resolveIdentity).
     contact?: string
+    // Optional references to already-uploaded attachment images (cp-beacon-attachments).
+    attachments?: BeaconAttachmentRef[]
   }) => Promise<{ id: string; reference?: string }>
   list?: () => Promise<FeedbackReport[]>
   confirm?: (id: string) => Promise<void>

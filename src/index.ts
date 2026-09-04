@@ -19,6 +19,7 @@ export type {
   FeedbackAdapter,
   BeaconContext,
   BeaconEnvelope,
+  BeaconAttachmentRef,
 } from './types.js'
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA, type WebContextConfig } from './diagnostics.js'
 export { createBeaconAdapter, buildEnvelope, type BeaconAdapterConfig } from './adapter.js'
