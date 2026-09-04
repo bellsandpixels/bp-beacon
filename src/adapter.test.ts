@@ -20,7 +20,7 @@ const cfg: BeaconAdapterConfig = {
 // The exact set of keys /api/beacon-signal accepts (docs/beacon-anon-ingest-spec.md). buildEnvelope must
 // never emit a key outside this set (a stray key could carry un-allow-listed data past the D3 boundary).
 // `contact` is the optional, explicit reporter identity (bp_contact, never auto-derived).
-const ALLOWED_KEYS = new Set(['product', 'kind', 'title', 'details', 'consent', 'clientReportId', 'hp', 'context', 'contact'])
+const ALLOWED_KEYS = new Set(['product', 'kind', 'title', 'details', 'consent', 'clientReportId', 'hp', 'context', 'contact', 'attachments'])
 
 test('envelope carries the canonical fields, product stamped, honeypot empty', () => {
   const e = buildEnvelope(cfg, { kind: 'bug', title: 'x', details: 'y', consent: false })
@@ -87,6 +87,32 @@ test('an explicit empty contact clears it and beats the host identity fallback',
 
 test('contact never escapes the allow-list', () => {
   const e = buildEnvelope(withIdentity, { kind: 'bug', title: 't', details: 'd', consent: true, contact: 'me@example.com' })
+  for (const k of Object.keys(e)) assert.ok(ALLOWED_KEYS.has(k), `unexpected envelope key: ${k}`)
+})
+
+// Attachment references (cp-beacon-attachments): ride only when non-empty, capped, and never escape the
+// allow-list. Each ref is a ticket-minted id + advisory type/size the server re-verifies.
+const ref = (id: string) => ({ id, contentType: 'image/png', bytes: 1024 })
+
+test('no attachments: the attachments key is absent', () => {
+  const e = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: false })
+  assert.equal('attachments' in e, false)
+  const empty = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: false, attachments: [] })
+  assert.equal('attachments' in empty, false)
+})
+
+test('attachment refs ride when present and are capped at 3', () => {
+  const e = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: false, attachments: [ref('a'), ref('b')] })
+  assert.deepEqual(e.attachments, [ref('a'), ref('b')])
+  const many = buildEnvelope(cfg, {
+    kind: 'bug', title: 't', details: 'd', consent: false,
+    attachments: [ref('a'), ref('b'), ref('c'), ref('d')],
+  })
+  assert.equal(many.attachments!.length, 3)
+})
+
+test('attachments never escape the allow-list', () => {
+  const e = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: true, contact: 'me@x.io', attachments: [ref('a')] })
   for (const k of Object.keys(e)) assert.ok(ALLOWED_KEYS.has(k), `unexpected envelope key: ${k}`)
 })
 

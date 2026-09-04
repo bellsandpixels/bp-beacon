@@ -19,6 +19,12 @@ export interface BeaconContext {
     route: string;
     locale: string;
 }
+export interface BeaconAttachmentRef {
+    id: string;
+    contentType: string;
+    bytes: number;
+    sha256?: string;
+}
 export interface BeaconEnvelope {
     product: string;
     kind: FeedbackKind;
@@ -29,6 +35,7 @@ export interface BeaconEnvelope {
     hp: string;
     context?: BeaconContext;
     contact?: string;
+    attachments?: BeaconAttachmentRef[];
 }
 export interface FeedbackAdapter {
     submit: (input: {
@@ -37,6 +44,7 @@ export interface FeedbackAdapter {
         details: string;
         consent: boolean;
         contact?: string;
+        attachments?: BeaconAttachmentRef[];
     }) => Promise<{
         id: string;
         reference?: string;

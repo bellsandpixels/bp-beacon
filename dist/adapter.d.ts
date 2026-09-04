@@ -1,4 +1,4 @@
-import type { BeaconEnvelope, FeedbackAdapter } from './types.js';
+import type { BeaconEnvelope, FeedbackAdapter, BeaconAttachmentRef } from './types.js';
 import { type WebContextConfig } from './diagnostics.js';
 export interface BeaconAdapterConfig extends WebContextConfig {
     endpoint: string;
@@ -12,5 +12,6 @@ export declare function buildEnvelope(cfg: BeaconAdapterConfig, input: {
     details: string;
     consent: boolean;
     contact?: string;
+    attachments?: BeaconAttachmentRef[];
 }): BeaconEnvelope;
 export declare function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter;
