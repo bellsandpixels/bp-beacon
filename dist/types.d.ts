@@ -28,6 +28,7 @@ export interface BeaconEnvelope {
     clientReportId?: string;
     hp: string;
     context?: BeaconContext;
+    contact?: string;
 }
 export interface FeedbackAdapter {
     submit: (input: {
@@ -35,6 +36,7 @@ export interface FeedbackAdapter {
         title: string;
         details: string;
         consent: boolean;
+        contact?: string;
     }) => Promise<{
         id: string;
         reference?: string;

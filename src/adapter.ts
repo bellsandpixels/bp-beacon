@@ -15,6 +15,11 @@ export interface BeaconAdapterConfig extends WebContextConfig {
   // The product tag stamped on the envelope (e.g. "fudemoji", "toudai"). A forwarder MAY re-stamp this
   // server-side; sending it keeps the direct and forwarded paths identical.
   product: string
+  // Optional host-known reporter identity, resolved FRESH at submit time (so a login/logout between
+  // adapter construction and submit is reflected), returning undefined when the user is unknown/anonymous.
+  // It is a FALLBACK only: a contact the caller passes to submit (a string, including an explicit '' to
+  // clear) always wins. Used for direct submit callers; the FeedbackPane resolves its own prefill.
+  resolveIdentity?: () => string | undefined
   // Injectable for tests; defaults to the global fetch.
   fetchImpl?: typeof fetch
 }
@@ -25,9 +30,11 @@ function newClientReportId(): string | undefined {
 
 // Build the wire envelope. Exported so a contract test can assert its shape against the server without a
 // network call.
+const MAX_CONTACT = 200
+
 export function buildEnvelope(
   cfg: BeaconAdapterConfig,
-  input: { kind: BeaconEnvelope['kind']; title: string; details: string; consent: boolean },
+  input: { kind: BeaconEnvelope['kind']; title: string; details: string; consent: boolean; contact?: string },
 ): BeaconEnvelope {
   const envelope: BeaconEnvelope = {
     product: cfg.product,
@@ -38,6 +45,12 @@ export function buildEnvelope(
     clientReportId: newClientReportId(),
     hp: '',
   }
+  // Reporter identity. The caller's explicit contact wins - `??` (not `||`) means an explicit '' (the
+  // reporter cleared a prefilled identity) beats the host fallback, so "cleared" genuinely clears; the
+  // host-known identity is consulted ONLY when the caller omitted the field entirely (contact undefined).
+  // Trim + cap to 200 (bp_contact's size), and attach only when something remains.
+  const contact = (input.contact ?? cfg.resolveIdentity?.() ?? '').trim().slice(0, MAX_CONTACT)
+  if (contact) envelope.contact = contact
   // Consent gate [D3]: attach the allow-list context ONLY when the reporter opts in.
   if (input.consent) envelope.context = gatherWebContext(cfg)
   return envelope

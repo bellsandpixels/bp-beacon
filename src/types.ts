@@ -54,6 +54,11 @@ export interface BeaconEnvelope {
   clientReportId?: string
   hp: string
   context?: BeaconContext
+  // Optional reporter contact (<= 200 chars). Explicit ONLY: either the reporter typed it, or the host
+  // passed a known identity the reporter could see and clear (BeaconAdapterConfig.resolveIdentity). The
+  // server maps it to bp_contact ("never auto-derived") and never infers it from IP/auth. Rides
+  // independently of the D3 consent gate - it is primary content the reporter controls, not auto-context.
+  contact?: string
 }
 
 // Backend-agnostic feedback adapter. The host wires submit (via createBeaconAdapter) and MAY supply the
@@ -65,6 +70,9 @@ export interface FeedbackAdapter {
     title: string
     details: string
     consent: boolean
+    // Optional reporter contact. A string (including '') is the caller's explicit value and wins; omit it
+    // entirely to let a host-configured identity resolver fill it (see BeaconAdapterConfig.resolveIdentity).
+    contact?: string
   }) => Promise<{ id: string; reference?: string }>
   list?: () => Promise<FeedbackReport[]>
   confirm?: (id: string) => Promise<void>

@@ -1,7 +1,8 @@
 // Contract test (SDK side): buildEnvelope must produce EXACTLY the /api/beacon-signal envelope the server
-// accepts - the canonical field set (product, kind, title, details, consent, clientReportId, hp, context?),
-// with context gated on consent [D3] and the honeypot always empty. The server-side half of this contract
-// (that beacon-signal accepts exactly this set) is pinned by a matching test in the client-portal repo.
+// accepts - the canonical field set (product, kind, title, details, consent, clientReportId, hp, context?,
+// contact?), with context gated on consent [D3] and the honeypot always empty. The server-side half of this
+// contract (that beacon-signal accepts exactly this set) is pinned by a matching test in the client-portal
+// repo; keep that repo's SDK_ENVELOPE_KEYS in lockstep with ALLOWED_KEYS below.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -18,7 +19,8 @@ const cfg: BeaconAdapterConfig = {
 
 // The exact set of keys /api/beacon-signal accepts (docs/beacon-anon-ingest-spec.md). buildEnvelope must
 // never emit a key outside this set (a stray key could carry un-allow-listed data past the D3 boundary).
-const ALLOWED_KEYS = new Set(['product', 'kind', 'title', 'details', 'consent', 'clientReportId', 'hp', 'context'])
+// `contact` is the optional, explicit reporter identity (bp_contact, never auto-derived).
+const ALLOWED_KEYS = new Set(['product', 'kind', 'title', 'details', 'consent', 'clientReportId', 'hp', 'context', 'contact'])
 
 test('envelope carries the canonical fields, product stamped, honeypot empty', () => {
   const e = buildEnvelope(cfg, { kind: 'bug', title: 'x', details: 'y', consent: false })
@@ -50,6 +52,42 @@ test('context is gated on consent [D3]: present only when consent === true', () 
   )
   assert.equal(on.context!.appName, 'Toudai Studio')
   assert.equal(on.context!.platform, 'web')
+})
+
+// Reporter identity (R6): `contact` rides only when explicit, trimmed + capped, and the reporter's value
+// (including an explicit '' to clear) always beats a host-configured resolveIdentity fallback.
+const withIdentity: BeaconAdapterConfig = { ...cfg, resolveIdentity: () => 'user@host.example' }
+
+test('no contact anywhere: the contact key is absent', () => {
+  const e = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: false })
+  assert.equal('contact' in e, false)
+})
+
+test('a reporter-typed contact rides as `contact`, trimmed and capped at 200', () => {
+  const e = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: false, contact: '  me@example.com  ' })
+  assert.equal(e.contact, 'me@example.com')
+  const e2 = buildEnvelope(cfg, { kind: 'bug', title: 't', details: 'd', consent: false, contact: 'a'.repeat(250) })
+  assert.equal(e2.contact!.length, 200)
+})
+
+test('host identity (resolveIdentity) fills contact when the caller omits the field', () => {
+  const e = buildEnvelope(withIdentity, { kind: 'bug', title: 't', details: 'd', consent: false })
+  assert.equal(e.contact, 'user@host.example')
+})
+
+test('a typed contact wins over the host identity', () => {
+  const e = buildEnvelope(withIdentity, { kind: 'bug', title: 't', details: 'd', consent: false, contact: 'typed@me.example' })
+  assert.equal(e.contact, 'typed@me.example')
+})
+
+test('an explicit empty contact clears it and beats the host identity fallback', () => {
+  const e = buildEnvelope(withIdentity, { kind: 'bug', title: 't', details: 'd', consent: false, contact: '' })
+  assert.equal('contact' in e, false)
+})
+
+test('contact never escapes the allow-list', () => {
+  const e = buildEnvelope(withIdentity, { kind: 'bug', title: 't', details: 'd', consent: true, contact: 'me@example.com' })
+  for (const k of Object.keys(e)) assert.ok(ALLOWED_KEYS.has(k), `unexpected envelope key: ${k}`)
 })
 
 // Coarse device/os derivation - the new form-factor + OS-family fields. Best-effort and coarse ONLY:
