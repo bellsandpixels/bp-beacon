@@ -6,7 +6,7 @@ import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
 // injected FeedbackAdapter. Submit-only + anonymous: no reports list.
 //
 // "Issue" is the reporter-facing label for a bug (owner rename); the wire kind stays 'bug'.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, validateAttachmentFile } from './attachments.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
 const KINDS = [
@@ -35,21 +35,26 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
     // ticketEndpoint was configured). Each holds a stable object-URL for the preview, revoked on remove.
     const [attachments, setAttachments] = useState([]);
     const [attachError, setAttachError] = useState(null);
+    const [dragging, setDragging] = useState(false);
     const canAttach = typeof adapter.uploadAttachments === 'function';
+    // A ref mirror of `attachments`, so the document-level paste listener (bound once) always caps against
+    // the current count without a stale closure.
+    const attachmentsRef = useRef([]);
+    attachmentsRef.current = attachments;
     const canSend = title.trim().length >= 3 && !busy;
-    function onPick(e) {
-        const picked = Array.from(e.target.files ?? []);
-        e.target.value = ''; // let the reporter re-pick the same file after a remove
+    // Add images from any source (file input, drag-drop, or clipboard paste). Validates each against the
+    // image allow-list + size cap and stops at MAX_ATTACHMENTS; the first rejection is surfaced.
+    function addFiles(picked) {
         let err = null;
         const additions = [];
         for (const f of picked) {
-            if (attachments.length + additions.length >= MAX_ATTACHMENTS) {
+            if (attachmentsRef.current.length + additions.length >= MAX_ATTACHMENTS) {
                 err = `You can attach up to ${MAX_ATTACHMENTS} images.`;
                 break;
             }
-            const v = validateAttachmentFile(f);
-            if (v) {
-                err = v;
+            const verr = validateAttachmentFile(f);
+            if (verr) {
+                err = verr;
                 continue;
             }
             additions.push({ file: f, url: URL.createObjectURL(f) });
@@ -58,6 +63,36 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
             setAttachments((cur) => [...cur, ...additions]);
         setAttachError(err);
     }
+    function onPick(e) {
+        const picked = Array.from(e.target.files ?? []);
+        e.target.value = ''; // let the reporter re-pick the same file after a remove
+        addFiles(picked);
+    }
+    function onDrop(e) {
+        e.preventDefault();
+        setDragging(false);
+        const imgs = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith('image/'));
+        if (imgs.length)
+            addFiles(imgs);
+    }
+    // Clipboard paste (Ctrl/Cmd+V): a screenshot lives on the clipboard (Win+Shift+S, Cmd+Ctrl+Shift+4),
+    // so pasting attaches it directly - the single biggest convenience for a screenshot feature. Bound at the
+    // document while the picker is available; only IMAGE items are consumed, so pasting text into a field is
+    // untouched. addFiles reads attachmentsRef, so binding once is safe.
+    useEffect(() => {
+        if (!canAttach)
+            return;
+        function onPaste(e) {
+            const imgs = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+            if (imgs.length) {
+                e.preventDefault();
+                addFiles(imgs);
+            }
+        }
+        document.addEventListener('paste', onPaste);
+        return () => document.removeEventListener('paste', onPaste);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canAttach]);
     function removeAttachment(i) {
         setAttachments((cur) => {
             const a = cur[i];
@@ -116,7 +151,25 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
                         background: kind === k.value ? v('accent', '#9B251B') : 'transparent',
                         color: kind === k.value ? v('accent-fg', '#fff') : v('fg', '#1a1a1a'),
                         cursor: 'pointer',
-                    }, children: k.label }, k.value))) }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Title" }), _jsx("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: kind === 'bug' ? 'What went wrong?' : "What's your idea?", maxLength: 200, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Details" }), _jsx("textarea", { value: details, onChange: (e) => setDetails(e.target.value), rows: 4, maxLength: 5000, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a'), resize: 'vertical' } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "How can we reach you? (optional)" }), _jsx("input", { type: "email", value: contact, onChange: (e) => setContact(e.target.value), placeholder: "you@example.com", maxLength: 200, autoComplete: "email", style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } }), prefill.length > 0 && contact === prefill ? (_jsx("span", { style: { fontSize: 11, opacity: 0.6 }, children: "Filled from your account. Edit or clear it if you like." })) : null] }), canAttach ? (_jsxs("div", { style: { display: 'grid', gap: 6 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Add a screenshot (optional)" }), attachments.length ? (_jsx("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 8 }, children: attachments.map((a, i) => (_jsxs("div", { style: { position: 'relative', width: 64, height: 64 }, children: [_jsx("img", { src: a.url, alt: a.file.name, style: { width: 64, height: 64, objectFit: 'cover', borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}` } }), _jsx("button", { type: "button", "aria-label": `Remove ${a.file.name}`, onClick: () => removeAttachment(i), style: { position: 'absolute', top: -6, right: -6, width: 18, height: 18, lineHeight: '16px', textAlign: 'center', padding: 0, borderRadius: '50%', border: 'none', background: v('accent', '#9B251B'), color: v('accent-fg', '#fff'), cursor: 'pointer', fontSize: 12 }, children: "\u00D7" })] }, a.url))) })) : null, attachments.length < MAX_ATTACHMENTS ? (_jsxs("label", { style: { justifySelf: 'start', fontSize: 13, color: v('accent', '#9B251B'), cursor: 'pointer' }, children: ["+ Add image", _jsx("input", { type: "file", accept: ATTACHMENT_ACCEPT, multiple: true, onChange: onPick, style: { display: 'none' } })] })) : null, _jsx("span", { style: { fontSize: 11, opacity: 0.6 }, children: "PNG, JPEG, or WebP, up to 10 MB each. Attachments can contain personal information, so only include what you are comfortable sharing." }), attachError ? _jsx("span", { style: { fontSize: 12, color: v('error', '#9B251B') }, children: attachError }) : null] })) : null, _jsxs("div", { style: { display: 'grid', gap: 4 }, children: [_jsxs("label", { style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }, children: [_jsx("input", { type: "checkbox", checked: consent, onChange: (e) => setConsent(e.target.checked) }), _jsx("span", { children: "Include basic diagnostics (app version, screen, device type, OS, language) to help us investigate." })] }), gatherContext ? (_jsx("button", { type: "button", onClick: () => setShowIncluded((s) => !s), style: { justifySelf: 'start', background: 'none', border: 'none', color: v('accent', '#9B251B'), cursor: 'pointer', padding: 0, fontSize: 12 }, children: showIncluded ? 'Hide' : "What's included?" })) : null, included ? (_jsx("pre", { style: { margin: 0, fontSize: 11, opacity: 0.75, whiteSpace: 'pre-wrap', background: v('inspect-bg', '#f4f4f4'), padding: 8, borderRadius: v('radius', '8px') }, children: JSON.stringify(included, null, 2) })) : null] }), error ? _jsx("p", { style: { margin: 0, color: v('error', '#9B251B'), fontSize: 13 }, children: error }) : null, _jsx("button", { onClick: send, disabled: !canSend, style: {
+                    }, children: k.label }, k.value))) }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Title" }), _jsx("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: kind === 'bug' ? 'What went wrong?' : "What's your idea?", maxLength: 200, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "Details" }), _jsx("textarea", { value: details, onChange: (e) => setDetails(e.target.value), rows: 4, maxLength: 5000, style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a'), resize: 'vertical' } })] }), _jsxs("label", { style: { display: 'grid', gap: 4 }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: "How can we reach you? (optional)" }), _jsx("input", { type: "email", value: contact, onChange: (e) => setContact(e.target.value), placeholder: "you@example.com", maxLength: 200, autoComplete: "email", style: { padding: 8, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } }), prefill.length > 0 && contact === prefill ? (_jsx("span", { style: { fontSize: 11, opacity: 0.6 }, children: "Filled from your account. Edit or clear it if you like." })) : null] }), canAttach ? (_jsxs("div", { onDragOver: (e) => {
+                    e.preventDefault();
+                    if (!dragging)
+                        setDragging(true);
+                }, onDragEnter: (e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                }, onDragLeave: (e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                }, onDrop: onDrop, style: {
+                    display: 'grid',
+                    gap: 6,
+                    padding: 10,
+                    borderRadius: v('radius', '8px'),
+                    border: `1px dashed ${dragging ? v('accent', '#9B251B') : v('border', '#d0d0d0')}`,
+                    background: dragging ? v('field-bg', 'rgba(0,0,0,0.03)') : 'transparent',
+                    transition: 'border-color .12s, background-color .12s',
+                }, children: [_jsx("span", { style: { fontSize: 13, opacity: 0.8 }, children: dragging ? 'Drop the image here' : 'Add a screenshot (optional)' }), attachments.length ? (_jsx("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 8 }, children: attachments.map((a, i) => (_jsxs("div", { style: { position: 'relative', width: 64, height: 64 }, children: [_jsx("img", { src: a.url, alt: a.file.name, style: { width: 64, height: 64, objectFit: 'cover', borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#d0d0d0')}` } }), _jsx("button", { type: "button", "aria-label": `Remove ${a.file.name}`, onClick: () => removeAttachment(i), style: { position: 'absolute', top: -6, right: -6, width: 18, height: 18, lineHeight: '16px', textAlign: 'center', padding: 0, borderRadius: '50%', border: 'none', background: v('accent', '#9B251B'), color: v('accent-fg', '#fff'), cursor: 'pointer', fontSize: 12 }, children: "\u00D7" })] }, a.url))) })) : null, attachments.length < MAX_ATTACHMENTS ? (_jsxs("label", { style: { justifySelf: 'start', fontSize: 13, color: v('accent', '#9B251B'), cursor: 'pointer' }, children: ["+ Add image", _jsx("input", { type: "file", accept: ATTACHMENT_ACCEPT, multiple: true, onChange: onPick, style: { display: 'none' } })] })) : null, _jsx("span", { style: { fontSize: 11, opacity: 0.6 }, children: "Drag an image in, or paste a screenshot (Ctrl+V). PNG, JPEG, or WebP, up to 10 MB each. Attachments can contain personal information, so only include what you are comfortable sharing." }), attachError ? _jsx("span", { style: { fontSize: 12, color: v('error', '#9B251B') }, children: attachError }) : null] })) : null, _jsxs("div", { style: { display: 'grid', gap: 4 }, children: [_jsxs("label", { style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }, children: [_jsx("input", { type: "checkbox", checked: consent, onChange: (e) => setConsent(e.target.checked) }), _jsx("span", { children: "Include basic diagnostics (app version, screen, device type, OS, language) to help us investigate." })] }), gatherContext ? (_jsx("button", { type: "button", onClick: () => setShowIncluded((s) => !s), style: { justifySelf: 'start', background: 'none', border: 'none', color: v('accent', '#9B251B'), cursor: 'pointer', padding: 0, fontSize: 12 }, children: showIncluded ? 'Hide' : "What's included?" })) : null, included ? (_jsx("pre", { style: { margin: 0, fontSize: 11, opacity: 0.75, whiteSpace: 'pre-wrap', background: v('inspect-bg', '#f4f4f4'), padding: 8, borderRadius: v('radius', '8px') }, children: JSON.stringify(included, null, 2) })) : null] }), error ? _jsx("p", { style: { margin: 0, color: v('error', '#9B251B'), fontSize: 13 }, children: error }) : null, _jsx("button", { onClick: send, disabled: !canSend, style: {
                     padding: '8px 16px',
                     borderRadius: v('radius', '8px'),
                     border: 'none',

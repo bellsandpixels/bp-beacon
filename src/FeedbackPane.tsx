@@ -6,7 +6,7 @@
 //
 // "Issue" is the reporter-facing label for a bug (owner rename); the wire kind stays 'bug'.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FeedbackAdapter, FeedbackKind, BeaconContext } from './types.js'
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, validateAttachmentFile } from './attachments.js'
 
@@ -52,23 +52,28 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
   // ticketEndpoint was configured). Each holds a stable object-URL for the preview, revoked on remove.
   const [attachments, setAttachments] = useState<{ file: File; url: string }[]>([])
   const [attachError, setAttachError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
   const canAttach = typeof adapter.uploadAttachments === 'function'
+  // A ref mirror of `attachments`, so the document-level paste listener (bound once) always caps against
+  // the current count without a stale closure.
+  const attachmentsRef = useRef<{ file: File; url: string }[]>([])
+  attachmentsRef.current = attachments
 
   const canSend = title.trim().length >= 3 && !busy
 
-  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(e.target.files ?? [])
-    e.target.value = '' // let the reporter re-pick the same file after a remove
+  // Add images from any source (file input, drag-drop, or clipboard paste). Validates each against the
+  // image allow-list + size cap and stops at MAX_ATTACHMENTS; the first rejection is surfaced.
+  function addFiles(picked: File[]) {
     let err: string | null = null
     const additions: { file: File; url: string }[] = []
     for (const f of picked) {
-      if (attachments.length + additions.length >= MAX_ATTACHMENTS) {
+      if (attachmentsRef.current.length + additions.length >= MAX_ATTACHMENTS) {
         err = `You can attach up to ${MAX_ATTACHMENTS} images.`
         break
       }
-      const v = validateAttachmentFile(f)
-      if (v) {
-        err = v
+      const verr = validateAttachmentFile(f)
+      if (verr) {
+        err = verr
         continue
       }
       additions.push({ file: f, url: URL.createObjectURL(f) })
@@ -76,6 +81,37 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
     if (additions.length) setAttachments((cur) => [...cur, ...additions])
     setAttachError(err)
   }
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? [])
+    e.target.value = '' // let the reporter re-pick the same file after a remove
+    addFiles(picked)
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    const imgs = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith('image/'))
+    if (imgs.length) addFiles(imgs)
+  }
+
+  // Clipboard paste (Ctrl/Cmd+V): a screenshot lives on the clipboard (Win+Shift+S, Cmd+Ctrl+Shift+4),
+  // so pasting attaches it directly - the single biggest convenience for a screenshot feature. Bound at the
+  // document while the picker is available; only IMAGE items are consumed, so pasting text into a field is
+  // untouched. addFiles reads attachmentsRef, so binding once is safe.
+  useEffect(() => {
+    if (!canAttach) return
+    function onPaste(e: ClipboardEvent) {
+      const imgs = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'))
+      if (imgs.length) {
+        e.preventDefault()
+        addFiles(imgs)
+      }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAttach])
 
   function removeAttachment(i: number) {
     setAttachments((cur) => {
@@ -195,8 +231,33 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
       </label>
 
       {canAttach ? (
-        <div style={{ display: 'grid', gap: 6 }}>
-          <span style={{ fontSize: 13, opacity: 0.8 }}>Add a screenshot (optional)</span>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault()
+            if (!dragging) setDragging(true)
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault()
+            setDragging(false)
+          }}
+          onDrop={onDrop}
+          style={{
+            display: 'grid',
+            gap: 6,
+            padding: 10,
+            borderRadius: v('radius', '8px'),
+            border: `1px dashed ${dragging ? v('accent', '#9B251B') : v('border', '#d0d0d0')}`,
+            background: dragging ? v('field-bg', 'rgba(0,0,0,0.03)') : 'transparent',
+            transition: 'border-color .12s, background-color .12s',
+          }}
+        >
+          <span style={{ fontSize: 13, opacity: 0.8 }}>
+            {dragging ? 'Drop the image here' : 'Add a screenshot (optional)'}
+          </span>
           {attachments.length ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {attachments.map((a, i) => (
@@ -225,8 +286,8 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
             </label>
           ) : null}
           <span style={{ fontSize: 11, opacity: 0.6 }}>
-            PNG, JPEG, or WebP, up to 10 MB each. Attachments can contain personal information, so only include
-            what you are comfortable sharing.
+            Drag an image in, or paste a screenshot (Ctrl+V). PNG, JPEG, or WebP, up to 10 MB each.
+            Attachments can contain personal information, so only include what you are comfortable sharing.
           </span>
           {attachError ? <span style={{ fontSize: 12, color: v('error', '#9B251B') }}>{attachError}</span> : null}
         </div>
