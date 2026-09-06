@@ -13,6 +13,35 @@ const KINDS = [
     { value: 'bug', label: 'Issue' },
     { value: 'idea', label: 'Idea' },
 ];
+// Pull image files from a paste (or drop). Covers BOTH clipboardData.files (Chromium) and
+// clipboardData.items -> getAsFile() (Firefox/Safari, and "copy image" from a web page, which populate
+// items but not files). Dedupes by name/size/type, since Chromium reports the same pasted image in both.
+function imagesFromClipboard(cd) {
+    if (!cd)
+        return [];
+    const out = [];
+    const seen = new Set();
+    const add = (f) => {
+        if (!f || !f.type.startsWith('image/'))
+            return;
+        const key = `${f.name}|${f.size}|${f.type}`;
+        if (seen.has(key))
+            return;
+        seen.add(key);
+        out.push(f);
+    };
+    for (const f of Array.from(cd.files ?? []))
+        add(f);
+    const items = cd.items;
+    if (items) {
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            if (it && it.kind === 'file')
+                add(it.getAsFile());
+        }
+    }
+    return out;
+}
 export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }) {
     const [kind, setKind] = useState('bug');
     const [title, setTitle] = useState('');
@@ -83,7 +112,7 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
         if (!canAttach)
             return;
         function onPaste(e) {
-            const imgs = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+            const imgs = imagesFromClipboard(e.clipboardData);
             if (imgs.length) {
                 e.preventDefault();
                 addFiles(imgs);
