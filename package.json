@@ -11,13 +11,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./tour": {
+      "types": "./dist/tour.d.ts",
+      "default": "./dist/tour.js"
     }
   },
+  "sideEffects": false,
   "files": ["dist", "src"],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/adapter.test.ts src/attachments.test.ts src/walkVerdict.test.ts src/walkClient.test.ts"
+    "test": "node --import tsx --test src/adapter.test.ts src/attachments.test.ts src/walkVerdict.test.ts src/walkClient.test.ts src/onboardingStore.test.ts src/whatsNew.test.ts src/tourPlacement.test.ts"
   },
   "peerDependencies": {
     "react": ">=18"
