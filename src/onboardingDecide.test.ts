@@ -39,6 +39,11 @@ test('no version to compare (news null): only the welcome rule applies', () => {
   assert.equal(decideAutoOpen(null, emptyOnboardingState(), steps, T0), 'onboarding')
 })
 
+test("no steps declared (What's new only): never asks to open the welcome, still opens release notes", () => {
+  assert.equal(decideAutoOpen(news(false), emptyOnboardingState(), [], T0), undefined)
+  assert.equal(decideAutoOpen(news(true), emptyOnboardingState(), [], T0), 'changelog')
+})
+
 test('newest parseable version skips an Unreleased heading', () => {
   assert.equal(newestParseableVersion([{ version: 'Unreleased' }, { version: '1.2' }, { version: '1.1' }]), '1.2')
   assert.equal(newestParseableVersion([{ version: '0.9.0' }]), '0.9.0')
