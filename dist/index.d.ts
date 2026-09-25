@@ -13,7 +13,7 @@ export type { OnboardingStep, OnboardingState, OnboardingAdapter, OnboardingPoli
 export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, type LocalOnboardingStoreConfig, type OnboardingStorage, } from './onboardingStore.js';
 export { whatsNewSinceLastVisit, compareVersions, parseVersion, type VersionedEntry, type WhatsNewResult } from './whatsNew.js';
 export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js';
-export { CoachTour, type CoachTourProps } from './CoachTour.js';
-export { placeTourCard, type CardPlacement, type Rect, type Size } from './tourPlacement.js';
+export type { CoachTourProps } from './CoachTour.js';
+export type { CardPlacement, Rect, Size } from './tourPlacement.js';
 export { useBeaconOnboarding, type BeaconOnboardingConfig, type BeaconOnboarding, type BeaconOnboardingFrameProps, } from './useBeaconOnboarding.js';
 export { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js';

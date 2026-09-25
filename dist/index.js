@@ -25,8 +25,6 @@ export { createWalkAdapter } from './walkClient.js';
 export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, } from './onboardingStore.js';
 export { whatsNewSinceLastVisit, compareVersions, parseVersion } from './whatsNew.js';
 export { OnboardingPane } from './OnboardingPane.js';
-export { CoachTour } from './CoachTour.js';
-export { placeTourCard } from './tourPlacement.js';
 // The one first-run wiring every product mounts: config in, AppFrame props + the tour out. The auto-open
 // rule (What's new wins over the welcome) lives in onboardingDecide, once.
 export { useBeaconOnboarding, } from './useBeaconOnboarding.js';

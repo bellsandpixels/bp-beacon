@@ -2,4 +2,5 @@
 // default export is what React.lazy expects; the named export matches the main entry.
 import { CoachTour } from './CoachTour.js';
 export { CoachTour } from './CoachTour.js';
+export { placeTourCard, TOUR_GAP, TOUR_MARGIN } from './tourPlacement.js';
 export default CoachTour;

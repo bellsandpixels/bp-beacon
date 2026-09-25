@@ -56,7 +56,8 @@ One shared first-run experience instead of each product hand-rolling its own. Th
 - `CoachTour`: a spotlight tour over elements marked `data-beacon-tour="<target>"`. A step whose anchor is
   not on the page is passed over. Back / Next, arrow keys, and Esc to skip. It is a modal dialog: Tab and
   Shift+Tab wrap around the card's own controls, and focus that lands on the page underneath is pulled
-  back. Also published as `@bp/beacon/tour` so it can be lazy-loaded.
+  back. Published on `@bp/beacon/tour` only, which the hook below loads lazily, so a plain import of
+  `@bp/beacon` never carries the tour code.
 - `whatsNewSinceLastVisit(entries, currentVersion, lastSeenVersion)`: the entries newer than what the user
   last saw, and whether What's new should open. Never on a first visit, once per upgrade.
 
@@ -69,27 +70,11 @@ to memory when storage is blocked):
 | **Don't show me this again** | Nothing opens by itself again, neither the pane nor any tour. The user can still open it by hand. |
 | Seen version | `markVersionSeen(version)` after deciding, so What's new opens once per upgrade. |
 
-```tsx
-import {
-  OnboardingPane, createLocalOnboardingStore, shouldAutoOpenOnboarding, shouldAutoStartTour,
-  whatsNewSinceLastVisit,
-} from '@bp/beacon'
-const CoachTour = React.lazy(() => import('@bp/beacon/tour'))
+The pieces above (`OnboardingPane`, `CoachTour` on `@bp/beacon/tour`, the store and policy helpers,
+`whatsNewSinceLastVisit`) are exported for a host that is not the Beacon bar. A product never assembles
+them itself: it mounts the hook.
 
-const onboarding = createLocalOnboardingStore({ product: 'toudai', userKey: hashedUserId })
-const steps = [{ id: 'brand', title: 'Set up your brand' }, { id: 'publish', title: 'Publish your site' }]
-
-const state = await onboarding.load()
-const openWelcome = shouldAutoOpenOnboarding(state, steps)
-const runTour = shouldAutoStartTour(state, 'studio-intro')
-const news = whatsNewSinceLastVisit(changelogEntries, appVersion, state.lastSeenVersion)
-await onboarding.markVersionSeen(appVersion)
-
-<OnboardingPane adapter={onboarding} steps={steps} intro="..." onClose={close} onStartTour={startTour} />
-<CoachTour adapter={onboarding} tourId="studio-intro" steps={[{ target: 'publish', title: 'Publish here' }]} onClose={endTour} />
-```
-
-**In the Beacon bar: one hook, written once.** A product does not assemble the pieces above itself.
+**In the Beacon bar: one hook, written once.**
 `useBeaconOnboarding` is the single wiring every product mounts (fudemoji, toudai and ike are the primary
 surfaces, and this is not written three times): it owns the store, the seen version, what opens by itself,
 the "New" tags, the welcome pane and the lazily loaded tour, and returns plain props that `@bp/ui`'s
