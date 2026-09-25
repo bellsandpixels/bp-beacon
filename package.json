@@ -4,7 +4,7 @@
   "private": true,
   "description": "Shared Bells & Pixels Beacon feedback SDK (client-portal-governed; decision #63). Design-system-agnostic web FeedbackPane + a canonical adapter that speaks the /api/beacon-signal envelope. The envelope contract is canonical in client-portal docs/beacon-anon-ingest-spec.md.",
   "type": "module",
-  "//consumption": "Ships BUILT dist/ (committed) so consumers vendor it as a submodule and import plain JS - no build step or transpilePackages in a consumer's CI, and no .ts-across-symlink resolution snag. Rebuild dist (npm run build) whenever src changes; a CI check keeps dist in sync with src.",
+  "//consumption": "Ships BUILT dist/ (committed) so consumers vendor it as a submodule and import plain JS - no build step or transpilePackages in a consumer's CI, and no .ts-across-symlink resolution snag. Rebuild dist (npm run build) whenever src changes and commit only the dist files whose content changed; CI (.github/workflows/ci.yml, npm run check:dist) fails any PR or main push whose dist is out of sync with src.",
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
   "exports": {
@@ -22,6 +22,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "check:dist": "node scripts/check-dist.mjs",
     "test": "node --import tsx --test src/adapter.test.ts src/attachments.test.ts src/walkVerdict.test.ts src/walkClient.test.ts src/onboardingStore.test.ts src/whatsNew.test.ts src/tourPlacement.test.ts src/tourFocus.test.ts src/onboardingDecide.test.ts"
   },
   "peerDependencies": {
