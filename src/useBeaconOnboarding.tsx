@@ -16,7 +16,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProp
 import { OnboardingPane } from './OnboardingPane.js'
 import { createLocalOnboardingStore, isChecklistDone } from './onboardingStore.js'
 import { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js'
-import { parseVersion, whatsNewSinceLastVisit, type VersionedEntry } from './whatsNew.js'
+import {
+  newestEntryDate,
+  parseVersion,
+  whatsNewSinceLastVisit,
+  whatsNewSinceLastVisitByDate,
+  type VersionedEntry,
+} from './whatsNew.js'
 import type { OnboardingAdapter, OnboardingPolicy, OnboardingState, OnboardingStep, TourStep } from './onboardingTypes.js'
 
 // The tour is its own chunk: a product that never starts one ships none of it.
@@ -30,6 +36,12 @@ export interface BeaconOnboardingConfig {
   version?: string
   // The product's changelog entries, newest first: parseChangelog(changelogMarkdown) from @bp/ui.
   entries: readonly VersionedEntry[]
+  // What identifies a release note. 'version' (default) compares the headings' versions. 'date' compares
+  // their ISO dates instead, for a product whose deploy pipeline rewrites the top heading's version on every
+  // build (client-portal stamps Major.Minor.<run number> into it): a restamped label never reopens What's
+  // new, a note with a new date does. In date mode `version` is ignored and the marker recorded as seen is
+  // the newest date.
+  whatsNewKey?: 'version' | 'date'
   steps: readonly OnboardingStep[]
   title?: string
   intro?: string
@@ -68,7 +80,11 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
     () => override ?? createLocalOnboardingStore({ product, userKey }),
     [override, product, userKey],
   )
-  const version = (config.version && parseVersion(config.version) ? config.version : undefined) ?? newestParseableVersion(entries)
+  const whatsNewKey = config.whatsNewKey ?? 'version'
+  const version =
+    whatsNewKey === 'date'
+      ? newestEntryDate(entries)
+      : ((config.version && parseVersion(config.version) ? config.version : undefined) ?? newestParseableVersion(entries))
 
   const [state, setState] = useState<OnboardingState | null>(null)
   const [autoOpen, setAutoOpen] = useState<AutoOpenPanel>()
@@ -83,7 +99,11 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
     void (async () => {
       try {
         const loaded = await adapter.load()
-        const news = version ? whatsNewSinceLastVisit(entries, version, loaded.lastSeenVersion) : null
+        const news = !version
+          ? null
+          : whatsNewKey === 'date'
+            ? whatsNewSinceLastVisitByDate(entries, version, loaded.lastSeenVersion)
+            : whatsNewSinceLastVisit(entries, version, loaded.lastSeenVersion)
         const open = decideAutoOpen(news, loaded, steps, new Date(), policy)
         const marked = version && loaded.lastSeenVersion !== version ? await adapter.markVersionSeen(version) : loaded
         if (!live) return
@@ -99,7 +119,7 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
     }
     // steps/policy are config literals in practice; re-deciding on their identity would re-run every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adapter, version, entries, enabled])
+  }, [adapter, version, whatsNewKey, entries, enabled])
 
   const startTour = useCallback(() => setTouring(true), [])
 

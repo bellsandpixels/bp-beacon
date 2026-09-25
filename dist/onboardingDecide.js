@@ -10,7 +10,8 @@ import { parseVersion } from './whatsNew.js';
 export function decideAutoOpen(news, state, steps, now = new Date(), policy = {}) {
     if (news?.shouldOpen && policy.whatsNewOnUpgrade !== false)
         return 'changelog';
-    if (shouldAutoOpenOnboarding(state, steps, now, policy))
+    // No checklist declared (a What's-new-only surface, such as a marketing site): there is no welcome to open.
+    if (steps.length && shouldAutoOpenOnboarding(state, steps, now, policy))
         return 'onboarding';
     return undefined;
 }

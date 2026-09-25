@@ -23,7 +23,7 @@ export { createStubWalkAdapter } from './walkAdapter.js';
 // endpoints. The one client implementation a portal-backed product wires (the stub above is for demos).
 export { createWalkAdapter } from './walkClient.js';
 export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, } from './onboardingStore.js';
-export { whatsNewSinceLastVisit, compareVersions, parseVersion } from './whatsNew.js';
+export { whatsNewSinceLastVisit, whatsNewSinceLastVisitByDate, newestEntryDate, compareVersions, parseVersion, } from './whatsNew.js';
 export { OnboardingPane } from './OnboardingPane.js';
 // The one first-run wiring every product mounts: config in, AppFrame props + the tour out. The auto-open
 // rule (What's new wins over the welcome) lives in onboardingDecide, once.
