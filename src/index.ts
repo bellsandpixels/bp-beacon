@@ -59,3 +59,32 @@ export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js'
 // The portal-backed WalkAdapter (T3): maps the WalkAdapter interface onto the client-portal /api/walk/*
 // endpoints. The one client implementation a portal-backed product wires (the stub above is for demos).
 export { createWalkAdapter, type WalkAdapterConfig } from './walkClient.js'
+
+// First-run / onboarding: a welcome + checklist pane, a coach-mark tour, and "what's new since your last
+// visit", on one OnboardingAdapter (default: createLocalOnboardingStore). Skip ("not now"), "Don't show me
+// this again" and the last-seen version persist per product + user. CoachTour is also published on the
+// "@bp/beacon/tour" subpath so a product can lazy-load it.
+export type {
+  OnboardingStep,
+  OnboardingState,
+  OnboardingAdapter,
+  OnboardingPolicy,
+  TourOutcome,
+  TourStep,
+} from './onboardingTypes.js'
+export {
+  createLocalOnboardingStore,
+  emptyOnboardingState,
+  parseOnboardingState,
+  onboardingStorageKey,
+  isChecklistDone,
+  shouldAutoOpenOnboarding,
+  shouldAutoStartTour,
+  DEFAULT_RESURFACE_MS,
+  type LocalOnboardingStoreConfig,
+  type OnboardingStorage,
+} from './onboardingStore.js'
+export { whatsNewSinceLastVisit, compareVersions, parseVersion, type VersionedEntry, type WhatsNewResult } from './whatsNew.js'
+export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js'
+export { CoachTour, type CoachTourProps } from './CoachTour.js'
+export { placeTourCard, type CardPlacement, type Rect, type Size } from './tourPlacement.js'

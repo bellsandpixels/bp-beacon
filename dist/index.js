@@ -22,3 +22,8 @@ export { createStubWalkAdapter } from './walkAdapter.js';
 // The portal-backed WalkAdapter (T3): maps the WalkAdapter interface onto the client-portal /api/walk/*
 // endpoints. The one client implementation a portal-backed product wires (the stub above is for demos).
 export { createWalkAdapter } from './walkClient.js';
+export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, } from './onboardingStore.js';
+export { whatsNewSinceLastVisit, compareVersions, parseVersion } from './whatsNew.js';
+export { OnboardingPane } from './OnboardingPane.js';
+export { CoachTour } from './CoachTour.js';
+export { placeTourCard } from './tourPlacement.js';

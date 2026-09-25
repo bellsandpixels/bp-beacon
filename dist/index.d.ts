@@ -9,3 +9,9 @@ export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js';
 export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js';
 export { createWalkAdapter, type WalkAdapterConfig } from './walkClient.js';
+export type { OnboardingStep, OnboardingState, OnboardingAdapter, OnboardingPolicy, TourOutcome, TourStep, } from './onboardingTypes.js';
+export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, type LocalOnboardingStoreConfig, type OnboardingStorage, } from './onboardingStore.js';
+export { whatsNewSinceLastVisit, compareVersions, parseVersion, type VersionedEntry, type WhatsNewResult } from './whatsNew.js';
+export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js';
+export { CoachTour, type CoachTourProps } from './CoachTour.js';
+export { placeTourCard, type CardPlacement, type Rect, type Size } from './tourPlacement.js';
