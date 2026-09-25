@@ -54,8 +54,10 @@ One shared first-run experience instead of each product hand-rolling its own. Th
   when the host calls `adapter.completeStep(id)` as the real action happens (or by hand with
   `manualComplete`).
 - `CoachTour`: a spotlight tour over elements marked `data-beacon-tour="<target>"`. A step whose anchor is
-  not on the page is passed over. Back / Next, arrow keys, and Esc to skip. Also published as
-  `@bp/beacon/tour` so it can be lazy-loaded.
+  not on the page is passed over. Back / Next, arrow keys, and Esc to skip. It is a modal dialog: Tab and
+  Shift+Tab wrap around the card's own controls, and focus that lands on the page underneath is pulled
+  back. Published on `@bp/beacon/tour` only, which the hook below loads lazily, so a plain import of
+  `@bp/beacon` never carries the tour code.
 - `whatsNewSinceLastVisit(entries, currentVersion, lastSeenVersion)`: the entries newer than what the user
   last saw, and whether What's new should open. Never on a first visit, once per upgrade.
 
@@ -68,25 +70,35 @@ to memory when storage is blocked):
 | **Don't show me this again** | Nothing opens by itself again, neither the pane nor any tour. The user can still open it by hand. |
 | Seen version | `markVersionSeen(version)` after deciding, so What's new opens once per upgrade. |
 
+The pieces above (`OnboardingPane`, `CoachTour` on `@bp/beacon/tour`, the store and policy helpers,
+`whatsNewSinceLastVisit`) are exported for a host that is not the Beacon bar. A product never assembles
+them itself: it mounts the hook.
+
+**In the Beacon bar: one hook, written once.**
+`useBeaconOnboarding` is the single wiring every product mounts (fudemoji, toudai and ike are the primary
+surfaces, and this is not written three times): it owns the store, the seen version, what opens by itself,
+the "New" tags, the welcome pane and the lazily loaded tour, and returns plain props that `@bp/ui`'s
+AppFrame accepts (`renderOnboarding`, `autoOpen`, `newVersions`), so `@bp/ui` stays free of this package.
+
 ```tsx
-import {
-  OnboardingPane, createLocalOnboardingStore, shouldAutoOpenOnboarding, shouldAutoStartTour,
-  whatsNewSinceLastVisit,
-} from '@bp/beacon'
-const CoachTour = React.lazy(() => import('@bp/beacon/tour'))
+import { AppFrame, parseChangelog } from '@bp/ui/app-frame'
+import { useBeaconOnboarding } from '@bp/beacon'
 
-const onboarding = createLocalOnboardingStore({ product: 'toudai', userKey: hashedUserId })
-const steps = [{ id: 'brand', title: 'Set up your brand' }, { id: 'publish', title: 'Publish your site' }]
-
-const state = await onboarding.load()
-const openWelcome = shouldAutoOpenOnboarding(state, steps)
-const runTour = shouldAutoStartTour(state, 'studio-intro')
-const news = whatsNewSinceLastVisit(changelogEntries, appVersion, state.lastSeenVersion)
-await onboarding.markVersionSeen(appVersion)
-
-<OnboardingPane adapter={onboarding} steps={steps} intro="..." onClose={close} onStartTour={startTour} />
-<CoachTour adapter={onboarding} tourId="studio-intro" steps={[{ target: 'publish', title: 'Publish here' }]} onClose={endTour} />
+const entries = useMemo(() => parseChangelog(changelogMarkdown), [changelogMarkdown])
+const onboarding = useBeaconOnboarding({
+  product: 'toudai', entries, steps,
+  tour: { id: 'studio-intro', steps: [{ target: 'publish', title: 'Publish here' }] },
+})
+<AppFrame {...onboarding.frame} changelogMarkdown={changelogMarkdown} ... />
+{onboarding.tour}
 ```
+
+The rule it applies, once, in `decideAutoOpen`: after an upgrade What's new opens with the unseen entries
+tagged "New"; on a first run the welcome opens; when both are due What's new wins (it is once per upgrade,
+and an unfinished welcome comes back on a later visit). "Don't show me this again" silences the welcome and
+every tour, not release notes (`policy.whatsNewOnUpgrade: false` turns those off). `version` defaults to
+the newest changelog entry with a real version, so a top "Unreleased" heading does not disable it.
+`enabled: false` (signed out, a ring that hides it) offers and opens nothing.
 
 Tour-only variables: `--beacon-bg` / `--beacon-tour-bg` (card), `--beacon-tour-scrim`, `--beacon-tour-z`.
 A server-backed adapter (cross-device) can replace the local store without a consumer change: the

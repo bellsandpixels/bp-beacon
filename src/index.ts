@@ -86,5 +86,16 @@ export {
 } from './onboardingStore.js'
 export { whatsNewSinceLastVisit, compareVersions, parseVersion, type VersionedEntry, type WhatsNewResult } from './whatsNew.js'
 export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js'
-export { CoachTour, type CoachTourProps } from './CoachTour.js'
-export { placeTourCard, type CardPlacement, type Rect, type Size } from './tourPlacement.js'
+// CoachTour itself lives on the "@bp/beacon/tour" subpath ONLY (the hook below loads it lazily), so a plain
+// import of @bp/beacon never pulls the tour code. Its types stay here.
+export type { CoachTourProps } from './CoachTour.js'
+export type { CardPlacement, Rect, Size } from './tourPlacement.js'
+// The one first-run wiring every product mounts: config in, AppFrame props + the tour out. The auto-open
+// rule (What's new wins over the welcome) lives in onboardingDecide, once.
+export {
+  useBeaconOnboarding,
+  type BeaconOnboardingConfig,
+  type BeaconOnboarding,
+  type BeaconOnboardingFrameProps,
+} from './useBeaconOnboarding.js'
+export { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js'

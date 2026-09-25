@@ -27,7 +27,7 @@ const quietButton = {
     color: v('fg', 'inherit'),
     border: `1px solid ${v('border', 'rgba(127,127,127,.35)')}`,
 };
-export function OnboardingPane({ adapter, steps, title = 'Welcome', intro, onClose, onStartTour, manualComplete = false, }) {
+export function OnboardingPane({ adapter, steps, title = 'Welcome', intro, onClose, onStartTour, manualComplete = false, onStateChange, }) {
     const [state, setState] = useState(null);
     const [error, setError] = useState(null);
     const toggleId = useId();
@@ -44,7 +44,9 @@ export function OnboardingPane({ adapter, steps, title = 'Welcome', intro, onClo
     async function run(fn) {
         setError(null);
         try {
-            setState(await fn());
+            const next = await fn();
+            setState(next);
+            onStateChange?.(next);
         }
         catch {
             setError('That did not save. Try again.');
@@ -52,7 +54,7 @@ export function OnboardingPane({ adapter, steps, title = 'Welcome', intro, onClo
     }
     async function skip() {
         try {
-            await adapter.skip();
+            onStateChange?.(await adapter.skip());
         }
         catch {
             // Skipping must never trap the user in the pane; close even if the record did not save.

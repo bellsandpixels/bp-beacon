@@ -19,6 +19,8 @@ export interface OnboardingPaneProps {
   onStartTour?: () => void
   // Let the user tick a step by hand. Off by default: steps are ticked when the real action happens.
   manualComplete?: boolean
+  // Hear every saved change (a tick, Skip, the toggle), so a host can react without re-reading the store.
+  onStateChange?: (state: OnboardingState) => void
 }
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
@@ -51,6 +53,7 @@ export function OnboardingPane({
   onClose,
   onStartTour,
   manualComplete = false,
+  onStateChange,
 }: OnboardingPaneProps) {
   const [state, setState] = useState<OnboardingState | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +73,9 @@ export function OnboardingPane({
   async function run(fn: () => Promise<OnboardingState>) {
     setError(null)
     try {
-      setState(await fn())
+      const next = await fn()
+      setState(next)
+      onStateChange?.(next)
     } catch {
       setError('That did not save. Try again.')
     }
@@ -78,7 +83,7 @@ export function OnboardingPane({
 
   async function skip() {
     try {
-      await adapter.skip()
+      onStateChange?.(await adapter.skip())
     } catch {
       // Skipping must never trap the user in the pane; close even if the record did not save.
     }
