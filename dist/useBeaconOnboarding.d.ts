@@ -7,6 +7,7 @@ export interface BeaconOnboardingConfig {
     userKey?: string;
     version?: string;
     entries: readonly VersionedEntry[];
+    whatsNewKey?: 'version' | 'date';
     steps: readonly OnboardingStep[];
     title?: string;
     intro?: string;

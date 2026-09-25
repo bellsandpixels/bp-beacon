@@ -12,6 +12,9 @@
 
 export interface VersionedEntry {
   version: string
+  // The heading's date as written (parseChangelog: the text after " - "), ISO YYYY-MM-DD in every B&P
+  // changelog. Only the date-keyed rule at the bottom reads it.
+  date?: string
 }
 
 export interface WhatsNewResult<T extends VersionedEntry> {
@@ -57,5 +60,42 @@ export function whatsNewSinceLastVisit<T extends VersionedEntry>(
   })
   // An upgrade whose entries are all unparseable or absent still counts as "something changed", but with
   // nothing to show there is no reason to interrupt the user.
+  return { entries: fresh, shouldOpen: fresh.length > 0, firstVisit: false }
+}
+
+// An ISO date (YYYY-MM-DD) compares correctly as text; anything else is treated as no date at all, so a
+// prose date never sorts wrong silently.
+function isoDate(date: string | undefined): string | undefined {
+  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined
+}
+
+// The newest ISO date among the entries. They arrive newest first, but a hand-edited log may not be sorted.
+export function newestEntryDate(entries: readonly VersionedEntry[]): string | undefined {
+  let best: string | undefined
+  for (const e of entries) {
+    const d = isoDate(e.date)
+    if (d && (!best || d > best)) best = d
+  }
+  return best
+}
+
+// The same rule keyed by the entry DATE instead of the version, for a product whose deploy pipeline rewrites
+// the top heading's version on every build (client-portal stamps Major.Minor.<run number> into it): the label
+// moves while the note does not, so "newer than last seen" must compare dates, or What's new would reopen
+// after every deploy showing the same note. The marker recorded as seen is the newest date. An entry without
+// an ISO date is never new.
+export function whatsNewSinceLastVisitByDate<T extends VersionedEntry>(
+  entries: readonly T[],
+  currentDate: string,
+  lastSeenDate: string | undefined,
+): WhatsNewResult<T> {
+  if (!lastSeenDate) return { entries: [], shouldOpen: false, firstVisit: true }
+  const current = isoDate(currentDate)
+  const seen = isoDate(lastSeenDate)
+  if (!current || !seen || current <= seen) return { entries: [], shouldOpen: false, firstVisit: false }
+  const fresh = entries.filter((e) => {
+    const d = isoDate(e.date)
+    return !!d && d > seen && d <= current
+  })
   return { entries: fresh, shouldOpen: fresh.length > 0, firstVisit: false }
 }

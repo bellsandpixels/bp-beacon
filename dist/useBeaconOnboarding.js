@@ -16,14 +16,17 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { OnboardingPane } from './OnboardingPane.js';
 import { createLocalOnboardingStore, isChecklistDone } from './onboardingStore.js';
 import { decideAutoOpen, newestParseableVersion } from './onboardingDecide.js';
-import { parseVersion, whatsNewSinceLastVisit } from './whatsNew.js';
+import { newestEntryDate, parseVersion, whatsNewSinceLastVisit, whatsNewSinceLastVisitByDate, } from './whatsNew.js';
 // The tour is its own chunk: a product that never starts one ships none of it.
 const LazyCoachTour = lazy(() => import('./tour.js'));
 export function useBeaconOnboarding(config) {
     const { product, userKey, entries, steps, title, intro, manualComplete, tour, policy, enabled = true, style } = config;
     const override = config.adapter;
     const adapter = useMemo(() => override ?? createLocalOnboardingStore({ product, userKey }), [override, product, userKey]);
-    const version = (config.version && parseVersion(config.version) ? config.version : undefined) ?? newestParseableVersion(entries);
+    const whatsNewKey = config.whatsNewKey ?? 'version';
+    const version = whatsNewKey === 'date'
+        ? newestEntryDate(entries)
+        : ((config.version && parseVersion(config.version) ? config.version : undefined) ?? newestParseableVersion(entries));
     const [state, setState] = useState(null);
     const [autoOpen, setAutoOpen] = useState();
     const [newVersions, setNewVersions] = useState();
@@ -37,7 +40,11 @@ export function useBeaconOnboarding(config) {
         void (async () => {
             try {
                 const loaded = await adapter.load();
-                const news = version ? whatsNewSinceLastVisit(entries, version, loaded.lastSeenVersion) : null;
+                const news = !version
+                    ? null
+                    : whatsNewKey === 'date'
+                        ? whatsNewSinceLastVisitByDate(entries, version, loaded.lastSeenVersion)
+                        : whatsNewSinceLastVisit(entries, version, loaded.lastSeenVersion);
                 const open = decideAutoOpen(news, loaded, steps, new Date(), policy);
                 const marked = version && loaded.lastSeenVersion !== version ? await adapter.markVersionSeen(version) : loaded;
                 if (!live)
@@ -55,7 +62,7 @@ export function useBeaconOnboarding(config) {
         };
         // steps/policy are config literals in practice; re-deciding on their identity would re-run every render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [adapter, version, entries, enabled]);
+    }, [adapter, version, whatsNewKey, entries, enabled]);
     const startTour = useCallback(() => setTouring(true), []);
     const offer = enabled && !!state && !isChecklistDone(state, steps);
     const renderOnboarding = useMemo(() => offer

@@ -84,7 +84,15 @@ export {
   type LocalOnboardingStoreConfig,
   type OnboardingStorage,
 } from './onboardingStore.js'
-export { whatsNewSinceLastVisit, compareVersions, parseVersion, type VersionedEntry, type WhatsNewResult } from './whatsNew.js'
+export {
+  whatsNewSinceLastVisit,
+  whatsNewSinceLastVisitByDate,
+  newestEntryDate,
+  compareVersions,
+  parseVersion,
+  type VersionedEntry,
+  type WhatsNewResult,
+} from './whatsNew.js'
 export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js'
 // CoachTour itself lives on the "@bp/beacon/tour" subpath ONLY (the hook below loads it lazily), so a plain
 // import of @bp/beacon never pulls the tour code. Its types stay here.
