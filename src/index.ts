@@ -88,3 +88,12 @@ export { whatsNewSinceLastVisit, compareVersions, parseVersion, type VersionedEn
 export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js'
 export { CoachTour, type CoachTourProps } from './CoachTour.js'
 export { placeTourCard, type CardPlacement, type Rect, type Size } from './tourPlacement.js'
+// The one first-run wiring every product mounts: config in, AppFrame props + the tour out. The auto-open
+// rule (What's new wins over the welcome) lives in onboardingDecide, once.
+export {
+  useBeaconOnboarding,
+  type BeaconOnboardingConfig,
+  type BeaconOnboarding,
+  type BeaconOnboardingFrameProps,
+} from './useBeaconOnboarding.js'
+export { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js'

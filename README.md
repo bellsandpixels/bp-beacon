@@ -89,11 +89,31 @@ await onboarding.markVersionSeen(appVersion)
 <CoachTour adapter={onboarding} tourId="studio-intro" steps={[{ target: 'publish', title: 'Publish here' }]} onClose={endTour} />
 ```
 
-**In the Beacon bar.** `@bp/ui`'s AppFrame has a slot for this: pass `renderOnboarding` (a "Get started"
-affordance that opens the pane in the bar's own panel), `autoOpen` and `newVersions`. The host decides what
-opens by itself and the kit obeys, so `@bp/ui` stays free of this package. When What's new and the welcome
-are both due, open What's new: it is once per upgrade, and an unfinished welcome comes back on a later
-visit. The full recipe is in bp-brand-kits `standards/design-system.md` (App frame).
+**In the Beacon bar: one hook, written once.** A product does not assemble the pieces above itself.
+`useBeaconOnboarding` is the single wiring every product mounts (fudemoji, toudai and ike are the primary
+surfaces, and this is not written three times): it owns the store, the seen version, what opens by itself,
+the "New" tags, the welcome pane and the lazily loaded tour, and returns plain props that `@bp/ui`'s
+AppFrame accepts (`renderOnboarding`, `autoOpen`, `newVersions`), so `@bp/ui` stays free of this package.
+
+```tsx
+import { AppFrame, parseChangelog } from '@bp/ui/app-frame'
+import { useBeaconOnboarding } from '@bp/beacon'
+
+const entries = useMemo(() => parseChangelog(changelogMarkdown), [changelogMarkdown])
+const onboarding = useBeaconOnboarding({
+  product: 'toudai', entries, steps,
+  tour: { id: 'studio-intro', steps: [{ target: 'publish', title: 'Publish here' }] },
+})
+<AppFrame {...onboarding.frame} changelogMarkdown={changelogMarkdown} ... />
+{onboarding.tour}
+```
+
+The rule it applies, once, in `decideAutoOpen`: after an upgrade What's new opens with the unseen entries
+tagged "New"; on a first run the welcome opens; when both are due What's new wins (it is once per upgrade,
+and an unfinished welcome comes back on a later visit). "Don't show me this again" silences the welcome and
+every tour, not release notes (`policy.whatsNewOnUpgrade: false` turns those off). `version` defaults to
+the newest changelog entry with a real version, so a top "Unreleased" heading does not disable it.
+`enabled: false` (signed out, a ring that hides it) offers and opens nothing.
 
 Tour-only variables: `--beacon-bg` / `--beacon-tour-bg` (card), `--beacon-tour-scrim`, `--beacon-tour-z`.
 A server-backed adapter (cross-device) can replace the local store without a consumer change: the

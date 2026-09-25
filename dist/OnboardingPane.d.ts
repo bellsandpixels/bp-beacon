@@ -1,4 +1,4 @@
-import type { OnboardingAdapter, OnboardingStep } from './onboardingTypes.js';
+import type { OnboardingAdapter, OnboardingState, OnboardingStep } from './onboardingTypes.js';
 export interface OnboardingPaneProps {
     adapter: OnboardingAdapter;
     steps: readonly OnboardingStep[];
@@ -7,5 +7,6 @@ export interface OnboardingPaneProps {
     onClose: () => void;
     onStartTour?: () => void;
     manualComplete?: boolean;
+    onStateChange?: (state: OnboardingState) => void;
 }
-export declare function OnboardingPane({ adapter, steps, title, intro, onClose, onStartTour, manualComplete, }: OnboardingPaneProps): import("react").JSX.Element;
+export declare function OnboardingPane({ adapter, steps, title, intro, onClose, onStartTour, manualComplete, onStateChange, }: OnboardingPaneProps): import("react").JSX.Element;
