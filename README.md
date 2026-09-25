@@ -98,7 +98,10 @@ tagged "New"; on a first run the welcome opens; when both are due What's new win
 and an unfinished welcome comes back on a later visit). "Don't show me this again" silences the welcome and
 every tour, not release notes (`policy.whatsNewOnUpgrade: false` turns those off). `version` defaults to
 the newest changelog entry with a real version, so a top "Unreleased" heading does not disable it.
-`enabled: false` (signed out, a ring that hides it) offers and opens nothing.
+`whatsNewKey: 'date'` keys What's new on the entries' ISO dates instead of their versions, for a product
+whose deploy pipeline stamps the build number into the top heading (client-portal): a restamped label never
+reopens What's new, a note with a new date does. `enabled: false` (signed out, a ring that hides it) offers
+and opens nothing.
 
 Tour-only variables: `--beacon-bg` / `--beacon-tour-bg` (card), `--beacon-tour-scrim`, `--beacon-tour-z`.
 A server-backed adapter (cross-device) can replace the local store without a consumer change: the
