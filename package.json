@@ -23,15 +23,22 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "check:dist": "node scripts/check-dist.mjs",
-    "test": "node --import tsx --test src/adapter.test.ts src/attachments.test.ts src/walkVerdict.test.ts src/walkClient.test.ts src/onboardingStore.test.ts src/whatsNew.test.ts src/whatsNewByDate.test.ts src/tourPlacement.test.ts src/tourFocus.test.ts src/onboardingDecide.test.ts src/userKey.test.ts"
+    "test": "node --import tsx --test src/adapter.test.ts src/attachments.test.ts src/walkVerdict.test.ts src/walkClient.test.ts src/onboardingStore.test.ts src/whatsNew.test.ts src/whatsNewByDate.test.ts src/tourPlacement.test.ts src/tourFocus.test.ts src/onboardingDecide.test.ts src/userKey.test.ts",
+    "harness": "vite --config harness/vite.config.ts"
   },
   "peerDependencies": {
     "react": ">=18"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "clsx": "^2.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vite": "^5.4.11"
   },
   "engines": {
     "node": ">=20"

@@ -1,0 +1,50 @@
+:root {
+  /* Default --beacon-* mapping so the OnboardingPane and CoachTour render themed in the harness.
+     A product supplies its own via the mount's `style`; these are neutral stand-ins. */
+  --beacon-bg: #ffffff;
+  --beacon-fg: #1a1a2e;
+  --beacon-border: #d0d3dd;
+  --beacon-accent: #2563eb;
+  --beacon-accent-fg: #ffffff;
+  --beacon-field-bg: #f8fafc;
+  --beacon-inspect-bg: #f1f5f9;
+  --beacon-error: #dc2626;
+  --beacon-radius: 8px;
+  --beacon-tour-bg: #ffffff;
+  --beacon-tour-scrim: rgba(15, 23, 42, 0.45);
+  --beacon-tour-z: 1000;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px system-ui, -apple-system, sans-serif; color: #1a1a2e; background: #eef0f4; }
+
+.harness { display: flex; flex-direction: column; height: 100vh; }
+.harness-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #fff; border-bottom: 1px solid #d0d3dd; }
+.harness-bar .muted { color: #64748b; }
+
+.harness-body { flex: 1; display: grid; grid-template-columns: 380px 1fr; overflow: hidden; }
+
+.authoring { padding: 16px; overflow-y: auto; border-right: 1px solid #d0d3dd; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+.authoring h2 { margin: 16px 0 4px; font-size: 14px; }
+.authoring h3 { margin: 8px 0 2px; font-size: 12px; color: #475569; }
+.authoring label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #475569; }
+.authoring input, .authoring textarea, .authoring select { font: inherit; padding: 4px 6px; border: 1px solid #d0d3dd; border-radius: 4px; background: #fff; color: inherit; }
+.rows { display: flex; flex-direction: column; gap: 4px; }
+.row { display: flex; gap: 4px; }
+.row input { flex: 1; min-width: 0; }
+.snippet { font-family: ui-monospace, monospace; font-size: 11px; }
+.ok { color: #16a34a; }
+.muted { color: #64748b; }
+
+.preview { overflow: auto; padding: 24px; display: flex; justify-content: center; }
+.device { background: #fff; border: 1px solid #d0d3dd; border-radius: 12px; padding: 16px; position: relative; height: fit-content; }
+.device-desktop { width: 900px; }
+.device-mobile { width: 375px; }
+.mock-rail { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mock-rail-item { padding: 6px 10px; background: #f1f5f9; border-radius: 6px; font-size: 12px; color: #475569; }
+.mock-surface { display: flex; flex-direction: column; gap: 20px; }
+.preview-label { font-size: 11px; color: #94a3b8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+.wn-frame { border: 1px solid #eef0f4; border-radius: 8px; overflow: hidden; }
+
+button { font: inherit; padding: 4px 10px; border: 1px solid #d0d3dd; background: #f8fafc; border-radius: 6px; cursor: pointer; color: inherit; }
+button:hover { background: #eef0f4; }
