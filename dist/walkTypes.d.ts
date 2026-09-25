@@ -45,6 +45,8 @@ export interface WalkIssue {
     title: string;
     status: FeedbackStatus;
     resolvedBuild?: string;
+    resolution?: string;
+    resolutionKind?: 'fixed' | 'clarified';
     build: string;
 }
 export interface WalkIdentity {

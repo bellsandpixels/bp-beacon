@@ -168,3 +168,35 @@ test('listAssigned maps GET /available to the assignment summaries (Slice 4c)', 
   assert.equal(assigned[0].status, 'published')
   assert.equal(calls.find((c) => c.url.includes('/available'))!.method, 'GET')
 })
+
+// Re-upstreamed from client-portal's copy (client-portal #641, decision #143): a resolved issue carries the
+// reporter-safe resolution note and whether it was a code fix or a clarification.
+test('listMyIssues maps resolution + resolutionKind (Fixed vs Clarified) from the portal row', async () => {
+  const { impl } = mockFetch({
+    'GET /api/walk/issues': {
+      issues: [
+        { id: 'i-1', reference: 'INT-0042', checkRef: 2, title: 'x', status: 'closed', build: '0.5.1900', resolvedBuild: '0.5.1910', resolution: 'Widened the hit target', resolutionKind: 'fixed' },
+        { id: 'i-2', reference: 'INT-0043', checkRef: 3, title: 'y', status: 'closed', build: '0.5.1900', resolvedBuild: '0.5.1910', resolution: 'By design: the badge hides on prod', resolutionKind: 'clarified' },
+      ],
+    },
+  })
+  const issues = await createWalkAdapter({ ...base, fetchImpl: impl }).listMyIssues()
+  assert.equal(issues[0].resolution, 'Widened the hit target')
+  assert.equal(issues[0].resolutionKind, 'fixed')
+  assert.equal(issues[1].resolutionKind, 'clarified')
+  assert.equal(issues[1].resolvedBuild, '0.5.1910')
+})
+
+// Re-upstreamed from client-portal's copy (client-portal #752, decision #155 slice 3): the walk's device
+// platform rides start() ONLY when the host set it, so an unchanged caller sends the previous request.
+test('start() sends platform only when the host set it', async () => {
+  const withP = mockFetch({ 'POST /api/walk/start': { walkId: 'w-1' } })
+  await createWalkAdapter({ ...base, platform: 'ios', fetchImpl: withP.impl }).start()
+  const started = withP.calls.find((c) => c.url.endsWith('/start'))!
+  assert.equal((started.body as { platform?: string }).platform, 'ios')
+
+  const without = mockFetch({ 'POST /api/walk/start': { walkId: 'w-2' } })
+  await createWalkAdapter({ ...base, fetchImpl: without.impl }).start()
+  const plain = without.calls.find((c) => c.url.endsWith('/start'))!
+  assert.equal('platform' in (plain.body as object), false)
+})

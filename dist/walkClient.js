@@ -34,6 +34,8 @@ function mapIssue(r) {
         title: r.title ?? '',
         status: r.status ?? 'submitted',
         resolvedBuild: r.resolvedBuild,
+        resolution: r.resolution,
+        resolutionKind: r.resolutionKind,
         build: r.build ?? '',
     };
 }
@@ -120,6 +122,9 @@ export function createWalkAdapter(cfg) {
                 env: opts?.env ?? cfg.env,
                 total: opts?.total ?? cfg.total,
                 ...(opts?.assignmentId ? { assignmentId: opts.assignmentId } : {}),
+                // #155 slice 3: the walk's device platform, so its flags dedup per platform. Included ONLY when the
+                // host set it, so a caller that does not pass platform sends a byte-for-byte previous request.
+                ...(cfg.platform ? { platform: cfg.platform } : {}),
             });
             walkId = r.walkId;
             return { walked: r.walked ?? {}, defects: r.defects ?? {} };

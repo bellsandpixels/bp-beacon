@@ -289,6 +289,11 @@ export function WalkPane({ adapter, onStartWalk, onStartAssignment }: WalkPanePr
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13 }}>{it.title}</div>
                 <div style={{ fontSize: 11, opacity: 0.6 }}>raised on {it.build}</div>
+                {it.resolution ? (
+                  <div style={{ fontSize: 12, opacity: 0.85, marginTop: 3 }}>
+                    <b>{it.resolutionKind === 'clarified' ? 'Clarified:' : 'Fixed:'}</b> {it.resolution}
+                  </div>
+                ) : null}
               </div>
               <span
                 style={{
@@ -302,7 +307,7 @@ export function WalkPane({ adapter, onStartWalk, onStartAssignment }: WalkPanePr
                   whiteSpace: 'nowrap',
                 }}
               >
-                {it.resolvedBuild ? `Fixed ${it.resolvedBuild}` : STATUS_LABEL[it.status]}
+                {it.resolvedBuild ? `${it.resolutionKind === 'clarified' ? 'Clarified' : 'Fixed'} ${it.resolvedBuild}` : STATUS_LABEL[it.status]}
               </span>
             </div>
           ))
