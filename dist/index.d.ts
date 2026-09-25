@@ -17,3 +17,5 @@ export type { CoachTourProps } from './CoachTour.js';
 export type { CardPlacement, Rect, Size } from './tourPlacement.js';
 export { useBeaconOnboarding, type BeaconOnboardingConfig, type BeaconOnboarding, type BeaconOnboardingFrameProps, } from './useBeaconOnboarding.js';
 export { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js';
+export { BeaconFrame, type BeaconFrameProps } from './BeaconFrame.js';
+export { userKeyOf } from './userKey.js';
