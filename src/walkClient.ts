@@ -29,6 +29,11 @@ export interface WalkAdapterConfig {
   // The build the walk runs on (the version-pill string) and the ring; stamped on the walk + its flags.
   build?: string
   env?: string
+  // The device platform this walk runs on (web | android | ios), stamped on the walk so its flags dedup per
+  // platform (decision #155 slice 3: iOS and Android walks of the same check are SEPARATE defects). A web pane
+  // passes 'web'; a native SDK passes its own. Omitted -> the portal defaults it (web), byte-for-byte the
+  // previous request for callers that do not set it.
+  platform?: string
   // The catalogue's surface count (M), sent at start/submit so coverage N/M is honest server-side.
   total?: number
   // Reuse the host's sign-in (e.g. the portal magic-link). Omitted -> authenticate() just resolves identity.
@@ -61,6 +66,8 @@ interface IssueResponse {
   title?: string
   status?: WalkIssue['status']
   resolvedBuild?: string
+  resolution?: string
+  resolutionKind?: 'fixed' | 'clarified'
   build?: string
 }
 interface CurrentResponse {
@@ -112,6 +119,8 @@ function mapIssue(r: IssueResponse): WalkIssue {
     title: r.title ?? '',
     status: r.status ?? 'submitted',
     resolvedBuild: r.resolvedBuild,
+    resolution: r.resolution,
+    resolutionKind: r.resolutionKind,
     build: r.build ?? '',
   }
 }
@@ -194,6 +203,9 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
         env: opts?.env ?? cfg.env,
         total: opts?.total ?? cfg.total,
         ...(opts?.assignmentId ? { assignmentId: opts.assignmentId } : {}),
+        // #155 slice 3: the walk's device platform, so its flags dedup per platform. Included ONLY when the
+        // host set it, so a caller that does not pass platform sends a byte-for-byte previous request.
+        ...(cfg.platform ? { platform: cfg.platform } : {}),
       })
       walkId = r.walkId
       return { walked: r.walked ?? {}, defects: r.defects ?? {} }

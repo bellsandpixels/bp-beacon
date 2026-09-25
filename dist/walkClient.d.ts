@@ -5,6 +5,7 @@ export interface WalkAdapterConfig {
     catalogueId: string;
     build?: string;
     env?: string;
+    platform?: string;
     total?: number;
     authenticate?: () => Promise<WalkIdentity>;
     resolveIdentity?: () => Promise<WalkIdentity>;

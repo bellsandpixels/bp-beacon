@@ -71,6 +71,8 @@ export interface WalkIssue {
   title: string
   status: FeedbackStatus
   resolvedBuild?: string // e.g. "0.5.1901" when the fix shipped to the reporter's ring
+  resolution?: string // the resolution NOTE (what shipped / the clarification), reporter-safe
+  resolutionKind?: 'fixed' | 'clarified' // a code fix vs a clarification / by-design answer
   build: string // the build the issue was raised on
 }
 
