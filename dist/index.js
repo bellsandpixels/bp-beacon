@@ -29,3 +29,6 @@ export { OnboardingPane } from './OnboardingPane.js';
 // rule (What's new wins over the welcome) lives in onboardingDecide, once.
 export { useBeaconOnboarding, } from './useBeaconOnboarding.js';
 export { decideAutoOpen, newestParseableVersion } from './onboardingDecide.js';
+// The one Beacon mount (decision #167): AppFrame + parseChangelog injected, so @bp/beacon stays UI-agnostic.
+export { BeaconFrame } from './BeaconFrame.js';
+export { userKeyOf } from './userKey.js';
