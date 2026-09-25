@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { OnboardingAdapter, OnboardingState, TourOutcome, TourStep } from './onboardingTypes.js'
 import { placeTourCard, type CardPlacement, type Rect } from './tourPlacement.js'
+import { TOUR_FOCUSABLE, trapFocusTarget } from './tourFocus.js'
 
 export interface CoachTourProps {
   adapter: OnboardingAdapter
@@ -113,6 +114,18 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
     if (placed) cardRef.current?.focus({ preventScroll: true })
   }, [step, placed])
 
+  // Keep focus inside the card while the tour runs: if anything moves it onto the page underneath (a
+  // script, an assistive-tech jump), bring it back, so the modal promise of aria-modal holds.
+  useEffect(() => {
+    if (!step) return
+    const onFocusIn = (e: FocusEvent) => {
+      const card = cardRef.current
+      if (card && e.target instanceof Node && !card.contains(e.target)) card.focus({ preventScroll: true })
+    }
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [step])
+
   useEffect(() => {
     if (!step) return
     const onMove = () => measure()
@@ -136,6 +149,19 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
       next()
     } else if (e.key === 'ArrowLeft') {
       back()
+    } else if (e.key === 'Tab') {
+      // Wrap Tab and Shift+Tab around the card's own controls instead of leaving the dialog.
+      const card = cardRef.current
+      if (!card) return
+      const controls = Array.from(card.querySelectorAll<HTMLElement>(TOUR_FOCUSABLE))
+      const current = controls.indexOf(document.activeElement as HTMLElement)
+      const target = trapFocusTarget(current, controls.length, e.shiftKey)
+      if (controls.length === 0) {
+        e.preventDefault()
+      } else if (target !== null) {
+        e.preventDefault()
+        controls[target]?.focus()
+      }
     }
   }
 

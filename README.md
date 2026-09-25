@@ -54,8 +54,9 @@ One shared first-run experience instead of each product hand-rolling its own. Th
   when the host calls `adapter.completeStep(id)` as the real action happens (or by hand with
   `manualComplete`).
 - `CoachTour`: a spotlight tour over elements marked `data-beacon-tour="<target>"`. A step whose anchor is
-  not on the page is passed over. Back / Next, arrow keys, and Esc to skip. Also published as
-  `@bp/beacon/tour` so it can be lazy-loaded.
+  not on the page is passed over. Back / Next, arrow keys, and Esc to skip. It is a modal dialog: Tab and
+  Shift+Tab wrap around the card's own controls, and focus that lands on the page underneath is pulled
+  back. Also published as `@bp/beacon/tour` so it can be lazy-loaded.
 - `whatsNewSinceLastVisit(entries, currentVersion, lastSeenVersion)`: the entries newer than what the user
   last saw, and whether What's new should open. Never on a first visit, once per upgrade.
 
@@ -87,6 +88,12 @@ await onboarding.markVersionSeen(appVersion)
 <OnboardingPane adapter={onboarding} steps={steps} intro="..." onClose={close} onStartTour={startTour} />
 <CoachTour adapter={onboarding} tourId="studio-intro" steps={[{ target: 'publish', title: 'Publish here' }]} onClose={endTour} />
 ```
+
+**In the Beacon bar.** `@bp/ui`'s AppFrame has a slot for this: pass `renderOnboarding` (a "Get started"
+affordance that opens the pane in the bar's own panel), `autoOpen` and `newVersions`. The host decides what
+opens by itself and the kit obeys, so `@bp/ui` stays free of this package. When What's new and the welcome
+are both due, open What's new: it is once per upgrade, and an unfinished welcome comes back on a later
+visit. The full recipe is in bp-brand-kits `standards/design-system.md` (App frame).
 
 Tour-only variables: `--beacon-bg` / `--beacon-tour-bg` (card), `--beacon-tour-scrim`, `--beacon-tour-z`.
 A server-backed adapter (cross-device) can replace the local store without a consumer change: the

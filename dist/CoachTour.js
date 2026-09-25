@@ -10,6 +10,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 // that never runs a tour ships none of it.
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { placeTourCard } from './tourPlacement.js';
+import { TOUR_FOCUSABLE, trapFocusTarget } from './tourFocus.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
 const SPOT_PAD = 6;
 function findAnchor(root, target) {
@@ -96,6 +97,19 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }) {
         if (placed)
             cardRef.current?.focus({ preventScroll: true });
     }, [step, placed]);
+    // Keep focus inside the card while the tour runs: if anything moves it onto the page underneath (a
+    // script, an assistive-tech jump), bring it back, so the modal promise of aria-modal holds.
+    useEffect(() => {
+        if (!step)
+            return;
+        const onFocusIn = (e) => {
+            const card = cardRef.current;
+            if (card && e.target instanceof Node && !card.contains(e.target))
+                card.focus({ preventScroll: true });
+        };
+        document.addEventListener('focusin', onFocusIn);
+        return () => document.removeEventListener('focusin', onFocusIn);
+    }, [step]);
     useEffect(() => {
         if (!step)
             return;
@@ -120,6 +134,22 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }) {
         }
         else if (e.key === 'ArrowLeft') {
             back();
+        }
+        else if (e.key === 'Tab') {
+            // Wrap Tab and Shift+Tab around the card's own controls instead of leaving the dialog.
+            const card = cardRef.current;
+            if (!card)
+                return;
+            const controls = Array.from(card.querySelectorAll(TOUR_FOCUSABLE));
+            const current = controls.indexOf(document.activeElement);
+            const target = trapFocusTarget(current, controls.length, e.shiftKey);
+            if (controls.length === 0) {
+                e.preventDefault();
+            }
+            else if (target !== null) {
+                e.preventDefault();
+                controls[target]?.focus();
+            }
         }
     }
     if (!step)
