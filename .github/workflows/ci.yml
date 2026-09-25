@@ -1,0 +1,45 @@
+# bp-beacon CI (cp-beacon-ci-dist-sync). Consumers import the committed dist/ as plain JS, so every PR and every
+# push to main proves: the package typechecks, the unit tests pass, and dist/ is exactly what src/ builds to.
+# Read-only: no secrets, no deploy, no publish. No em dashes (house rule).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: dist/ in sync with src/
+        run: npm run check:dist
+      # Self-test: the check must FAIL on a stale dist/, or the step above proves nothing. Runs last on a throwaway
+      # edit of the checkout (nothing is committed or uploaded).
+      - name: dist check fails closed on a stale dist/
+        run: |
+          echo '// deliberately stale' >> dist/index.js
+          if npm run check:dist; then
+            echo "check:dist passed on a stale dist/; the gate is broken" >&2
+            exit 1
+          fi
+          echo "check:dist correctly failed on a stale dist/."

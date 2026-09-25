@@ -19,12 +19,27 @@ Governed by **client-portal** (decision #63). The wire envelope is canonical in 
   id / IP / full UA. `deviceFromUA` / `osFromUA` / `osMajorFromUA` are exported and unit-tested.
 - Types: `FeedbackKind`, `FeedbackAdapter`, `BeaconEnvelope`, `BeaconContext`, `FeedbackStatus`, ...
 
-The native (Android/iOS) KMP client stays in the fudemoji repo until a second native consumer exists; it
-sends the **same** envelope.
+- `kmp/` - the shared native (Android/iOS) Kotlin Multiplatform client. It lives in this repo (decision #103:
+  bp-beacon is the single Beacon home, web and KMP) and sends the **same** envelope. Native builds see only
+  `kmp/`, never `src/`.
 
 ## Consuming it
 
-A git submodule under `vendor/` (mirrors `vendor/brand-kits` / `vendor/bp-qa`):
+`dist/` is committed, so a web consumer imports plain JS with no build step. A merge here reaches no product by
+itself: each consumer takes it its own way.
+
+| Consumer | How `@bp/beacon` arrives | What a change here needs to reach it |
+|---|---|---|
+| toudai console | submodule `apps/console/vendor/bp-beacon`, `"@bp/beacon": "file:./vendor/bp-beacon"` | bump the submodule pointer |
+| fudemoji web | submodule `web/vendor/bp-beacon`, the same `file:` dependency | bump the submodule pointer |
+| fudemoji native | submodule `vendor/bp-beacon`; Gradle `:beacon` points at `vendor/bp-beacon/kmp` | bump the submodule pointer (native only sees `kmp/`) |
+| client-portal | a hand copy in `vendor/bp-beacon` (`README.md`, `package.json`, `tsconfig.json`, `src/`, `dist/`; no submodule) | re-copy from a bp-beacon commit; edit here first, never the copy alone |
+| ike | nothing: ike uses only the `@bp/ui` AppFrame Beacon bar (bp-brand-kits), not this package | nothing, until ike takes `@bp/beacon` |
+
+The full map, the pin-check commands, and the traps (the client-portal copy diverging, a new pane needing an
+AppFrame slot too) live in bp-knowledge `kb/where-beacon-code-lives.md`.
+
+A new submodule consumer adds it under `vendor/` (mirrors `vendor/brand-kits` / `vendor/bp-qa`):
 
 ```
 git submodule add https://github.com/bellsandpixels/bp-beacon.git vendor/bp-beacon
@@ -112,3 +127,9 @@ contract is async.
 ```
 npm ci && npm run build
 ```
+
+Commit only the `dist/` files whose content changed (on Windows `tsc` rewrites every file with CRLF). CI
+(`.github/workflows/ci.yml`) runs `npm ci`, `npm run typecheck`, `npm test`, and `npm run check:dist` on every pull
+request and every push to `main`; `check:dist` rebuilds `src/` into a scratch directory and fails on any content
+difference from the committed `dist/` (line endings normalized), a missing file, or a stale leftover. Run
+`npm run check:dist` locally before you push.
