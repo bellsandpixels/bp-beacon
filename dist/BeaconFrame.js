@@ -15,8 +15,10 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 //     slots={{ renderFeedback, diagnostics }} />
 import { useMemo } from 'react';
 import { useBeaconOnboarding } from './useBeaconOnboarding.js';
+import { useBeaconMoments } from './useBeaconMoments.js';
 import { userKeyOf } from './userKey.js';
-export function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whatsNewKey, steps, title, intro, manualComplete, tour, policy, adapter, enabled, style, userId, userKey, appName, version, changelogMarkdown, help, slots, }) {
+const NO_MOMENTS = [];
+export function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whatsNewKey, steps, title, intro, manualComplete, tour, moments, policy, adapter, enabled, style, userId, userKey, appName, version, changelogMarkdown, help, slots, }) {
     const entries = useMemo(() => parseChangelog(changelogMarkdown ?? ''), [parseChangelog, changelogMarkdown]);
     const resolvedKey = userKey ?? (userId !== undefined ? userKeyOf(userId) : undefined);
     const onboarding = useBeaconOnboarding({
@@ -35,5 +37,11 @@ export function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whats
         enabled,
         style,
     });
-    return (_jsxs(_Fragment, { children: [_jsx(AppFrame, { ...onboarding.frame, appName: appName, version: version, changelogMarkdown: changelogMarkdown, help: help, ...slots }), onboarding.tour] }));
+    const momentsMount = useBeaconMoments({
+        adapter: onboarding.adapter,
+        moments: moments ?? NO_MOMENTS,
+        enabled: enabled !== false,
+        style,
+    });
+    return (_jsxs(_Fragment, { children: [_jsx(AppFrame, { ...onboarding.frame, appName: appName, version: version, changelogMarkdown: changelogMarkdown, help: help, ...slots }), onboarding.tour, momentsMount.node] }));
 }

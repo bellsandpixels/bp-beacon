@@ -3,7 +3,15 @@
 // blocked site data, SSR), so every read and write is guarded and the store falls back to memory: the
 // first-run still works for the visit, it just may show again next time.
 
-import type { OnboardingAdapter, OnboardingPolicy, OnboardingState, OnboardingStep, TourOutcome } from './onboardingTypes.js'
+import type {
+  MomentOutcome,
+  OnboardingAdapter,
+  OnboardingPolicy,
+  OnboardingState,
+  OnboardingStep,
+  TourOutcome,
+} from './onboardingTypes.js'
+import { withMomentOutcome } from './moments.js'
 
 export type OnboardingStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -19,7 +27,7 @@ export interface LocalOnboardingStoreConfig {
 export const DEFAULT_RESURFACE_MS = 7 * 24 * 60 * 60 * 1000
 
 export function emptyOnboardingState(): OnboardingState {
-  return { completed: [], suppressed: false, tours: {} }
+  return { completed: [], suppressed: false, tours: {}, moments: {} }
 }
 
 export function onboardingStorageKey(product: string, userKey?: string): string {
@@ -44,12 +52,19 @@ export function parseOnboardingState(raw: string | null): OnboardingState {
       if (val === 'completed' || val === 'skipped') tours[k] = val
     }
   }
+  const moments: Record<string, MomentOutcome> = {}
+  if (d.moments && typeof d.moments === 'object') {
+    for (const [k, val] of Object.entries(d.moments as Record<string, unknown>)) {
+      if (val === 'seen' || val === 'hidden') moments[k] = val
+    }
+  }
   return {
     completed: Array.isArray(d.completed) ? d.completed.filter((x): x is string => typeof x === 'string') : [],
     skippedAt: typeof d.skippedAt === 'string' ? d.skippedAt : undefined,
     suppressed: d.suppressed === true,
     tours,
     lastSeenVersion: typeof d.lastSeenVersion === 'string' ? d.lastSeenVersion : undefined,
+    moments,
   }
 }
 
@@ -110,6 +125,7 @@ export function createLocalOnboardingStore(config: LocalOnboardingStoreConfig): 
     setSuppressed: (suppressed) => update((s) => ({ ...s, suppressed })),
     finishTour: (tourId, outcome) => update((s) => ({ ...s, tours: { ...s.tours, [tourId]: outcome } })),
     markVersionSeen: (version) => update((s) => ({ ...s, lastSeenVersion: version })),
+    recordMoment: (momentId, outcome) => update((s) => withMomentOutcome(s, momentId, outcome)),
     reset: async () => {
       memory = emptyOnboardingState()
       try {

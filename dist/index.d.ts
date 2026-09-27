@@ -9,7 +9,7 @@ export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js';
 export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js';
 export { createWalkAdapter, type WalkAdapterConfig } from './walkClient.js';
-export type { OnboardingStep, OnboardingState, OnboardingAdapter, OnboardingPolicy, TourOutcome, TourStep, } from './onboardingTypes.js';
+export type { OnboardingStep, OnboardingState, OnboardingAdapter, OnboardingPolicy, TourOutcome, TourStep, Moment, MomentOutcome, } from './onboardingTypes.js';
 export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, type LocalOnboardingStoreConfig, type OnboardingStorage, } from './onboardingStore.js';
 export { whatsNewSinceLastVisit, whatsNewSinceLastVisitByDate, newestEntryDate, compareVersions, parseVersion, type VersionedEntry, type WhatsNewResult, } from './whatsNew.js';
 export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js';
@@ -19,3 +19,6 @@ export { useBeaconOnboarding, type BeaconOnboardingConfig, type BeaconOnboarding
 export { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js';
 export { BeaconFrame, type BeaconFrameProps } from './BeaconFrame.js';
 export { userKeyOf } from './userKey.js';
+export { announceMoment, shouldShowMoment, momentOutcome, withMomentOutcome, momentParagraphs, findMoment, MOMENT_EVENT, } from './moments.js';
+export { MomentPane, type MomentPaneProps } from './MomentPane.js';
+export { useBeaconMoments, type BeaconMomentsConfig, type BeaconMoments } from './useBeaconMoments.js';

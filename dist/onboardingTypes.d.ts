@@ -14,6 +14,7 @@ export interface OnboardingState {
     suppressed: boolean;
     tours: Record<string, TourOutcome>;
     lastSeenVersion?: string;
+    moments?: Record<string, MomentOutcome>;
 }
 export interface OnboardingAdapter {
     load(): Promise<OnboardingState>;
@@ -22,6 +23,7 @@ export interface OnboardingAdapter {
     setSuppressed(suppressed: boolean): Promise<OnboardingState>;
     finishTour(tourId: string, outcome: TourOutcome): Promise<OnboardingState>;
     markVersionSeen(version: string): Promise<OnboardingState>;
+    recordMoment?(momentId: string, outcome: MomentOutcome): Promise<OnboardingState>;
     reset(): Promise<OnboardingState>;
     subscribe?(listener: (state: OnboardingState) => void): () => void;
 }
@@ -32,4 +34,13 @@ export interface TourStep {
     target: string;
     title: string;
     body?: string;
+}
+export type MomentOutcome = 'seen' | 'hidden';
+export interface Moment {
+    id: string;
+    label?: string;
+    title: string;
+    body: string | readonly string[];
+    ok?: string;
+    repeat?: boolean;
 }
