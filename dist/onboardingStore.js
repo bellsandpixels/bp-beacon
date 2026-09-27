@@ -52,6 +52,17 @@ export function createLocalOnboardingStore(config) {
     const storage = config.storage ?? defaultStorage();
     const now = config.now ?? (() => new Date());
     let memory = null;
+    const listeners = new Set();
+    const notify = (state) => {
+        for (const l of [...listeners]) {
+            try {
+                l(state);
+            }
+            catch {
+                // A failing listener must not break the write or the other listeners.
+            }
+        }
+    };
     const read = () => {
         if (memory)
             return memory;
@@ -73,6 +84,7 @@ export function createLocalOnboardingStore(config) {
         catch {
             // Quota or blocked storage: keep the in-memory copy so this visit still behaves.
         }
+        notify(next);
         return next;
     };
     const update = async (fn) => write(fn(read()));
@@ -91,7 +103,14 @@ export function createLocalOnboardingStore(config) {
             catch {
                 // ignore; memory is already reset
             }
+            notify(memory);
             return memory;
+        },
+        subscribe: (listener) => {
+            listeners.add(listener);
+            return () => {
+                listeners.delete(listener);
+            };
         },
     };
 }

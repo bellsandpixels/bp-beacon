@@ -65,8 +65,11 @@ export function OnboardingPane({
       .load()
       .then((s) => live && setState(s))
       .catch(() => live && setError('Could not load your progress.'))
+    // Live ticks: the host completes steps from its own real actions while this pane is mounted (drawer closed).
+    const unsubscribe = adapter.subscribe?.((s) => live && setState(s))
     return () => {
       live = false
+      unsubscribe?.()
     }
   }, [adapter])
 
