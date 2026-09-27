@@ -32,3 +32,8 @@ export { decideAutoOpen, newestParseableVersion } from './onboardingDecide.js';
 // The one Beacon mount (decision #167): AppFrame + parseChangelog injected, so @bp/beacon stays UI-agnostic.
 export { BeaconFrame } from './BeaconFrame.js';
 export { userKeyOf } from './userKey.js';
+// First-time moment explainers (the first save, the first publish): declared on BeaconFrame (moments), announced
+// from anywhere with announceMoment(id), shown once per user and recorded in the same OnboardingState.
+export { announceMoment, shouldShowMoment, momentOutcome, withMomentOutcome, momentParagraphs, findMoment, MOMENT_EVENT, } from './moments.js';
+export { MomentPane } from './MomentPane.js';
+export { useBeaconMoments } from './useBeaconMoments.js';

@@ -118,7 +118,25 @@ whose deploy pipeline stamps the build number into the top heading (client-porta
 reopens What's new, a note with a new date does. `enabled: false` (signed out, a ring that hides it) offers
 and opens nothing.
 
+**First-time moments.** A short explainer the first time the user does something that needs explaining (the
+first save, the first publish). Declare the moments on `BeaconFrame` (or `useBeaconMoments` for a custom
+mount) and announce one from wherever the real action happens; the host decides nothing:
+
+```tsx
+<BeaconFrame ... moments={[{ id: 'save', label: 'Saved', title: 'Saved, not live yet', body: 'One.
+
+Two.' }]} />
+announceMoment('save') // after the real save, from any component
+```
+
+The rule, once, in `shouldShowMoment`: "Don't show me this again" on the welcome silences every moment; a
+moment is shown once per user and recorded as `seen` in the same `OnboardingState` (`moments`), or with
+`repeat: true` once per visit until the user ticks the explainer's own "Don't show this again" (`hidden`,
+final). Announcing the same moment twice in a visit shows it once; two different moments queue. An adapter
+without `recordMoment` still shows moments, it just cannot remember them.
+
 Tour-only variables: `--beacon-bg` / `--beacon-tour-bg` (card), `--beacon-tour-scrim`, `--beacon-tour-z`.
+Moment variables: `--beacon-bg` (card), `--beacon-moment-scrim`, `--beacon-moment-z`.
 A server-backed adapter (cross-device) can replace the local store without a consumer change: the
 contract is async.
 

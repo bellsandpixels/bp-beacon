@@ -15,9 +15,10 @@
 
 import { useMemo, type ComponentType, type CSSProperties, type ReactNode } from 'react'
 import { useBeaconOnboarding } from './useBeaconOnboarding.js'
+import { useBeaconMoments } from './useBeaconMoments.js'
 import { userKeyOf } from './userKey.js'
 import type { VersionedEntry } from './whatsNew.js'
-import type { OnboardingAdapter, OnboardingPolicy, OnboardingStep, TourStep } from './onboardingTypes.js'
+import type { Moment, OnboardingAdapter, OnboardingPolicy, OnboardingStep, TourStep } from './onboardingTypes.js'
 
 export interface BeaconFrameProps {
   // Injected from @bp/ui so @bp/beacon stays UI-agnostic (decision #108). The product passes its own real,
@@ -34,6 +35,9 @@ export interface BeaconFrameProps {
   intro?: string
   manualComplete?: boolean
   tour?: { id: string; steps: readonly TourStep[] }
+  // First-time moment explainers (moments.ts), announced from anywhere with announceMoment(id) and recorded in
+  // the same store as the welcome and the tours. Absent -> none.
+  moments?: readonly Moment[]
   policy?: OnboardingPolicy & { whatsNewOnUpgrade?: boolean }
   adapter?: OnboardingAdapter
   enabled?: boolean
@@ -55,6 +59,8 @@ export interface BeaconFrameProps {
   slots?: Record<string, unknown>
 }
 
+const NO_MOMENTS: readonly Moment[] = []
+
 export function BeaconFrame({
   appFrame: AppFrame,
   parseChangelog,
@@ -65,6 +71,7 @@ export function BeaconFrame({
   intro,
   manualComplete,
   tour,
+  moments,
   policy,
   adapter,
   enabled,
@@ -98,6 +105,12 @@ export function BeaconFrame({
     enabled,
     style,
   })
+  const momentsMount = useBeaconMoments({
+    adapter: onboarding.adapter,
+    moments: moments ?? NO_MOMENTS,
+    enabled: enabled !== false,
+    style,
+  })
   return (
     <>
       <AppFrame
@@ -109,6 +122,7 @@ export function BeaconFrame({
         {...slots}
       />
       {onboarding.tour}
+      {momentsMount.node}
     </>
   )
 }

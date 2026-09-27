@@ -127,7 +127,7 @@ test('no storage at all (SSR / node) still works in memory', async () => {
 })
 
 test('a corrupt or foreign record parses field by field to safe defaults', () => {
-  assert.deepEqual(parseOnboardingState('not json'), { completed: [], suppressed: false, tours: {} })
+  assert.deepEqual(parseOnboardingState('not json'), { completed: [], suppressed: false, tours: {}, moments: {} })
   const s = parseOnboardingState(
     JSON.stringify({ completed: ['a', 3], suppressed: 'yes', tours: { t: 'bogus', u: 'completed' }, lastSeenVersion: 1 }),
   )

@@ -26,6 +26,9 @@ export interface OnboardingState {
   suppressed: boolean // "Don't show me this again"
   tours: Record<string, TourOutcome> // one-shot tours already finished or skipped
   lastSeenVersion?: string // the app version the user last saw (drives What's new since last visit)
+  // First-time moment explainers already dealt with (see Moment below). Optional so an adapter written before
+  // moments existed still type-checks; the default store always fills it.
+  moments?: Record<string, MomentOutcome>
 }
 
 export interface OnboardingAdapter {
@@ -35,6 +38,9 @@ export interface OnboardingAdapter {
   setSuppressed(suppressed: boolean): Promise<OnboardingState>
   finishTour(tourId: string, outcome: TourOutcome): Promise<OnboardingState>
   markVersionSeen(version: string): Promise<OnboardingState>
+  // Record a first-time moment explainer's outcome. Optional so an older adapter still type-checks; without it
+  // a moment still shows, it just is not remembered past this visit.
+  recordMoment?(momentId: string, outcome: MomentOutcome): Promise<OnboardingState>
   reset(): Promise<OnboardingState>
   // Optional change feed. A host ticks steps from its own real actions (a save, a publish) while the pane is
   // already mounted, so the pane and the hook subscribe to show the tick live instead of a stale "0 of 2" until a
@@ -54,4 +60,23 @@ export interface TourStep {
   target: string
   title: string
   body?: string
+}
+
+// A first-time MOMENT: a short explainer the product raises the first time the user does something that needs
+// explaining (the first save, the first publish), announced from wherever the action happens with
+// announceMoment(id). It rides the same OnboardingState as the welcome and the tours, so "Don't show me this
+// again" on the welcome silences every moment too.
+//
+//   - repeat false (default): shown ONCE per user. Closing it records 'seen' and it never shows again.
+//   - repeat true: shown once per visit until the user ticks "Don't show this again" in the explainer, which
+//     records 'hidden'. For a moment the product wants repeated until the user says they have it.
+export type MomentOutcome = 'seen' | 'hidden'
+
+export interface Moment {
+  id: string
+  label?: string // a small kicker above the title, e.g. "Saved"
+  title: string
+  body: string | readonly string[] // paragraphs; a string splits on blank lines
+  ok?: string // the close button, default "Got it"
+  repeat?: boolean
 }

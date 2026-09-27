@@ -2,9 +2,10 @@
 // the pure policy that decides what opens automatically. Storage can be missing or throw (private mode,
 // blocked site data, SSR), so every read and write is guarded and the store falls back to memory: the
 // first-run still works for the visit, it just may show again next time.
+import { withMomentOutcome } from './moments.js';
 export const DEFAULT_RESURFACE_MS = 7 * 24 * 60 * 60 * 1000;
 export function emptyOnboardingState() {
-    return { completed: [], suppressed: false, tours: {} };
+    return { completed: [], suppressed: false, tours: {}, moments: {} };
 }
 export function onboardingStorageKey(product, userKey) {
     return `bp:beacon:onboarding:${product}:${userKey || 'anon'}`;
@@ -31,12 +32,20 @@ export function parseOnboardingState(raw) {
                 tours[k] = val;
         }
     }
+    const moments = {};
+    if (d.moments && typeof d.moments === 'object') {
+        for (const [k, val] of Object.entries(d.moments)) {
+            if (val === 'seen' || val === 'hidden')
+                moments[k] = val;
+        }
+    }
     return {
         completed: Array.isArray(d.completed) ? d.completed.filter((x) => typeof x === 'string') : [],
         skippedAt: typeof d.skippedAt === 'string' ? d.skippedAt : undefined,
         suppressed: d.suppressed === true,
         tours,
         lastSeenVersion: typeof d.lastSeenVersion === 'string' ? d.lastSeenVersion : undefined,
+        moments,
     };
 }
 function defaultStorage() {
@@ -95,6 +104,7 @@ export function createLocalOnboardingStore(config) {
         setSuppressed: (suppressed) => update((s) => ({ ...s, suppressed })),
         finishTour: (tourId, outcome) => update((s) => ({ ...s, tours: { ...s.tours, [tourId]: outcome } })),
         markVersionSeen: (version) => update((s) => ({ ...s, lastSeenVersion: version })),
+        recordMoment: (momentId, outcome) => update((s) => withMomentOutcome(s, momentId, outcome)),
         reset: async () => {
             memory = emptyOnboardingState();
             try {
