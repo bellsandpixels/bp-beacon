@@ -18,7 +18,7 @@ import { useBeaconOnboarding } from './useBeaconOnboarding.js'
 import { useBeaconMoments } from './useBeaconMoments.js'
 import { userKeyOf } from './userKey.js'
 import type { VersionedEntry } from './whatsNew.js'
-import type { Moment, OnboardingAdapter, OnboardingPolicy, OnboardingStep, TourStep } from './onboardingTypes.js'
+import type { BeaconTour, Moment, OnboardingAdapter, OnboardingPolicy, OnboardingStep, TourStep } from './onboardingTypes.js'
 
 export interface BeaconFrameProps {
   // Injected from @bp/ui so @bp/beacon stays UI-agnostic (decision #108). The product passes its own real,
@@ -38,6 +38,8 @@ export interface BeaconFrameProps {
   // First-time moment explainers (moments.ts), announced from anywhere with announceMoment(id) and recorded in
   // the same store as the welcome and the tours. Absent -> none.
   moments?: readonly Moment[]
+  // More tours; one with autoStart runs by itself the first time its first anchor is on the page.
+  tours?: readonly BeaconTour[]
   policy?: OnboardingPolicy & { whatsNewOnUpgrade?: boolean }
   adapter?: OnboardingAdapter
   enabled?: boolean
@@ -72,6 +74,7 @@ export function BeaconFrame({
   manualComplete,
   tour,
   moments,
+  tours,
   policy,
   adapter,
   enabled,
@@ -100,6 +103,7 @@ export function BeaconFrame({
     intro,
     manualComplete,
     tour,
+    tours,
     policy,
     adapter,
     enabled,

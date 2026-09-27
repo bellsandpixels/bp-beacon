@@ -73,6 +73,7 @@ export type {
   TourStep,
   Moment,
   MomentOutcome,
+  BeaconTour,
 } from './onboardingTypes.js'
 export {
   createLocalOnboardingStore,
@@ -108,7 +109,7 @@ export {
   type BeaconOnboarding,
   type BeaconOnboardingFrameProps,
 } from './useBeaconOnboarding.js'
-export { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js'
+export { decideAutoOpen, newestParseableVersion, pickAutoStartTour, type AutoOpenPanel } from './onboardingDecide.js'
 // The one Beacon mount (decision #167): AppFrame + parseChangelog injected, so @bp/beacon stays UI-agnostic.
 export { BeaconFrame, type BeaconFrameProps } from './BeaconFrame.js'
 export { userKeyOf } from './userKey.js'

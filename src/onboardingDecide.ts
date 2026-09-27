@@ -1,9 +1,9 @@
 // The one place the first-run auto-open decision is made. Every product mounts the same rule through
 // useBeaconOnboarding, so the rule lives here once, pure and unit-tested, and never in a product.
 
-import { shouldAutoOpenOnboarding } from './onboardingStore.js'
+import { shouldAutoOpenOnboarding, shouldAutoStartTour } from './onboardingStore.js'
 import { parseVersion, type VersionedEntry, type WhatsNewResult } from './whatsNew.js'
-import type { OnboardingPolicy, OnboardingState, OnboardingStep } from './onboardingTypes.js'
+import type { BeaconTour, OnboardingPolicy, OnboardingState, OnboardingStep } from './onboardingTypes.js'
 
 export type AutoOpenPanel = 'changelog' | 'onboarding'
 
@@ -29,4 +29,18 @@ export function decideAutoOpen(
 // A top "Unreleased" heading (fudemoji, ike) is skipped rather than silently disabling What's new.
 export function newestParseableVersion(entries: readonly VersionedEntry[]): string | undefined {
   return entries.find((e) => parseVersion(e.version) !== null)?.version
+}
+
+// Which declared autoStart tour, if any, should start now: the first one that has steps, is still due for this
+// user (not finished, skipped or suppressed), and whose FIRST step's anchor is on the page. A tour starts where it
+// begins, so an anchor further down its steps does not start it early. `hasAnchor` is injected so the rule stays
+// pure (the hook passes a DOM query).
+export function pickAutoStartTour(
+  state: OnboardingState,
+  tours: readonly BeaconTour[],
+  hasAnchor: (target: string) => boolean,
+): BeaconTour | undefined {
+  return tours.find(
+    (t) => t.autoStart && t.steps.length > 0 && shouldAutoStartTour(state, t.id) && hasAnchor(t.steps[0]!.target),
+  )
 }

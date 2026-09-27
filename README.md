@@ -73,6 +73,11 @@ One shared first-run experience instead of each product hand-rolling its own. Th
   Shift+Tab wrap around the card's own controls, and focus that lands on the page underneath is pulled
   back. Published on `@bp/beacon/tour` only, which the hook below loads lazily, so a plain import of
   `@bp/beacon` never carries the tour code.
+- Auto-start tours: beyond the welcome's "Show me around" tour, `useBeaconOnboarding` / `BeaconFrame` take
+  `tours: [{ id, steps, autoStart: true }]`. The Beacon starts such a tour by itself, once, the first time its
+  FIRST step's anchor is on the page (say the editor opens), and never again once it is finished, skipped, or
+  "Don't show me this again" is on (`pickAutoStartTour`, pure and tested). The host wires no event: marking the
+  anchors is the whole integration. `startTour(id)` runs any declared tour by hand.
 - `whatsNewSinceLastVisit(entries, currentVersion, lastSeenVersion)`: the entries newer than what the user
   last saw, and whether What's new should open. Never on a first visit, once per upgrade.
 

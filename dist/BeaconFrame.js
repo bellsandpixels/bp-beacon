@@ -18,7 +18,7 @@ import { useBeaconOnboarding } from './useBeaconOnboarding.js';
 import { useBeaconMoments } from './useBeaconMoments.js';
 import { userKeyOf } from './userKey.js';
 const NO_MOMENTS = [];
-export function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whatsNewKey, steps, title, intro, manualComplete, tour, moments, policy, adapter, enabled, style, userId, userKey, appName, version, changelogMarkdown, help, slots, }) {
+export function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whatsNewKey, steps, title, intro, manualComplete, tour, moments, tours, policy, adapter, enabled, style, userId, userKey, appName, version, changelogMarkdown, help, slots, }) {
     const entries = useMemo(() => parseChangelog(changelogMarkdown ?? ''), [parseChangelog, changelogMarkdown]);
     const resolvedKey = userKey ?? (userId !== undefined ? userKeyOf(userId) : undefined);
     const onboarding = useBeaconOnboarding({
@@ -32,6 +32,7 @@ export function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whats
         intro,
         manualComplete,
         tour,
+        tours,
         policy,
         adapter,
         enabled,

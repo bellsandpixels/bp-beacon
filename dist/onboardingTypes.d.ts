@@ -44,3 +44,8 @@ export interface Moment {
     ok?: string;
     repeat?: boolean;
 }
+export interface BeaconTour {
+    id: string;
+    steps: readonly TourStep[];
+    autoStart?: boolean;
+}

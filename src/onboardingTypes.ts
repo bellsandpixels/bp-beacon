@@ -80,3 +80,13 @@ export interface Moment {
   ok?: string // the close button, default "Got it"
   repeat?: boolean
 }
+
+// A tour the product declares beyond the welcome pane's "Show me around" tour. With autoStart, the Beacon starts it
+// BY ITSELF, once, the first time its first step's anchor is on the page (say the editor opens), unless the user
+// already finished or skipped it, or chose "Don't show me this again". The host wires no event: marking the
+// anchor is the whole integration. Without autoStart it runs only when the host calls startTour(id).
+export interface BeaconTour {
+  id: string
+  steps: readonly TourStep[]
+  autoStart?: boolean
+}
