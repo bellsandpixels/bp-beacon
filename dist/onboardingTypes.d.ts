@@ -23,6 +23,7 @@ export interface OnboardingAdapter {
     finishTour(tourId: string, outcome: TourOutcome): Promise<OnboardingState>;
     markVersionSeen(version: string): Promise<OnboardingState>;
     reset(): Promise<OnboardingState>;
+    subscribe?(listener: (state: OnboardingState) => void): () => void;
 }
 export interface OnboardingPolicy {
     resurfaceAfterMs?: number;

@@ -121,6 +121,12 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adapter, version, whatsNewKey, entries, enabled])
 
+  // Keep the hook's copy live too, so the Get started entry retires the moment the last step is done.
+  useEffect(() => {
+    if (!enabled || !adapter.subscribe) return
+    return adapter.subscribe((s) => setState(s))
+  }, [adapter, enabled])
+
   const startTour = useCallback(() => setTouring(true), [])
 
   const offer = enabled && !!state && !isChecklistDone(state, steps)

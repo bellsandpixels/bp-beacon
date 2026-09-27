@@ -36,6 +36,10 @@ export interface OnboardingAdapter {
   finishTour(tourId: string, outcome: TourOutcome): Promise<OnboardingState>
   markVersionSeen(version: string): Promise<OnboardingState>
   reset(): Promise<OnboardingState>
+  // Optional change feed. A host ticks steps from its own real actions (a save, a publish) while the pane is
+  // already mounted, so the pane and the hook subscribe to show the tick live instead of a stale "0 of 2" until a
+  // reload (found on the toudai Studio walk, 2026-09-27). Returns an unsubscribe. Absent = read-on-mount only.
+  subscribe?(listener: (state: OnboardingState) => void): () => void
 }
 
 export interface OnboardingPolicy {

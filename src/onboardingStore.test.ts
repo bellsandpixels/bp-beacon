@@ -136,3 +136,30 @@ test('a corrupt or foreign record parses field by field to safe defaults', () =>
   assert.deepEqual(s.tours, { u: 'completed' })
   assert.equal(s.lastSeenVersion, undefined)
 })
+
+test('subscribe: a host tick reaches a mounted subscriber live, and unsubscribe stops it', async () => {
+  const mem = new Map<string, string>()
+  const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) }
+  const store = createLocalOnboardingStore({ product: 'toudai', userKey: 'u1', storage })
+  const seen: string[][] = []
+  const unsubscribe = store.subscribe!((s) => seen.push([...s.completed]))
+  await store.completeStep('first-post')
+  await store.completeStep('publish')
+  await store.completeStep('publish') // idempotent; still notifies with the same state
+  assert.deepEqual(seen, [['first-post'], ['first-post', 'publish'], ['first-post', 'publish']])
+  unsubscribe()
+  await store.reset()
+  assert.equal(seen.length, 3)
+})
+
+test('subscribe: a throwing listener does not break the write or the other listeners', async () => {
+  const store = createLocalOnboardingStore({ product: 'toudai', userKey: 'u2', storage: undefined })
+  const seen: number[] = []
+  store.subscribe!(() => {
+    throw new Error('boom')
+  })
+  store.subscribe!((s) => seen.push(s.completed.length))
+  const next = await store.completeStep('first-post')
+  assert.deepEqual(next.completed, ['first-post'])
+  assert.deepEqual(seen, [1])
+})
