@@ -67,7 +67,8 @@ One shared first-run experience instead of each product hand-rolling its own. Th
 
 - `OnboardingPane`: a welcome card plus a "get started" checklist the product declares. Steps are ticked
   when the host calls `adapter.completeStep(id)` as the real action happens (or by hand with
-  `manualComplete`).
+  `manualComplete`). A step's `action` with `close: true` closes the pane after the click, for an action that
+  takes the user somewhere the open pane would cover (a create dialog); leave it off for one done in place.
 - `CoachTour`: a spotlight tour over elements marked `data-beacon-tour="<target>"`. A step whose anchor is
   not on the page is passed over. Back / Next, arrow keys, and Esc to skip. It is a modal dialog: Tab and
   Shift+Tab wrap around the card's own controls, and focus that lands on the page underneath is pulled

@@ -5,6 +5,7 @@ export interface OnboardingStep {
     action?: {
         label: string;
         onClick: () => void;
+        close?: boolean;
     };
 }
 export type TourOutcome = 'completed' | 'skipped';

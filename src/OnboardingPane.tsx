@@ -168,7 +168,14 @@ export function OnboardingPane({
                     {step.description ? <span style={{ fontSize: 12, opacity: 0.7 }}>{step.description}</span> : null}
                   </div>
                   {step.action && !ticked ? (
-                    <button type="button" style={quietButton} onClick={step.action.onClick}>
+                    <button
+                      type="button"
+                      style={quietButton}
+                      onClick={() => {
+                        step.action!.onClick()
+                        if (step.action!.close) onClose()
+                      }}
+                    >
                       {step.action.label}
                     </button>
                   ) : (

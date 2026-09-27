@@ -15,7 +15,10 @@ export interface OnboardingStep {
   description?: string
   // An optional call to action the host wires (e.g. "Create your first report" navigates there). The
   // step is ticked when the host calls adapter.completeStep(id), typically when the real action happens.
-  action?: { label: string; onClick: () => void }
+  // close: true closes the pane after the click, for an action that takes the user somewhere (a create dialog,
+  // another screen) the open pane would otherwise sit on top of. Leave it off for an action done in place (copy a
+  // link), so the user sees the step tick.
+  action?: { label: string; onClick: () => void; close?: boolean }
 }
 
 export type TourOutcome = 'completed' | 'skipped'
