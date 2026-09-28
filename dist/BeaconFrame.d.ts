@@ -1,6 +1,6 @@
 import { type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import type { VersionedEntry } from './whatsNew.js';
-import type { Moment, OnboardingAdapter, OnboardingPolicy, OnboardingStep, TourStep } from './onboardingTypes.js';
+import type { BeaconTour, Moment, OnboardingAdapter, OnboardingPolicy, OnboardingStep, TourStep } from './onboardingTypes.js';
 export interface BeaconFrameProps {
     appFrame: ComponentType<any>;
     parseChangelog: (markdown: string) => VersionedEntry[];
@@ -15,6 +15,7 @@ export interface BeaconFrameProps {
         steps: readonly TourStep[];
     };
     moments?: readonly Moment[];
+    tours?: readonly BeaconTour[];
     policy?: OnboardingPolicy & {
         whatsNewOnUpgrade?: boolean;
     };
@@ -29,4 +30,4 @@ export interface BeaconFrameProps {
     help?: unknown;
     slots?: Record<string, unknown>;
 }
-export declare function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whatsNewKey, steps, title, intro, manualComplete, tour, moments, policy, adapter, enabled, style, userId, userKey, appName, version, changelogMarkdown, help, slots, }: BeaconFrameProps): ReactNode;
+export declare function BeaconFrame({ appFrame: AppFrame, parseChangelog, product, whatsNewKey, steps, title, intro, manualComplete, tour, moments, tours, policy, adapter, enabled, style, userId, userKey, appName, version, changelogMarkdown, help, slots, }: BeaconFrameProps): ReactNode;

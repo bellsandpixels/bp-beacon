@@ -14,8 +14,9 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { OnboardingPane } from './OnboardingPane.js'
+import { tourAnchorSelector } from './tourAnchor.js'
 import { createLocalOnboardingStore, isChecklistDone } from './onboardingStore.js'
-import { decideAutoOpen, newestParseableVersion, type AutoOpenPanel } from './onboardingDecide.js'
+import { decideAutoOpen, newestParseableVersion, pickAutoStartTour, type AutoOpenPanel } from './onboardingDecide.js'
 import {
   newestEntryDate,
   parseVersion,
@@ -23,7 +24,7 @@ import {
   whatsNewSinceLastVisitByDate,
   type VersionedEntry,
 } from './whatsNew.js'
-import type { OnboardingAdapter, OnboardingPolicy, OnboardingState, OnboardingStep, TourStep } from './onboardingTypes.js'
+import type { BeaconTour, OnboardingAdapter, OnboardingPolicy, OnboardingState, OnboardingStep, TourStep } from './onboardingTypes.js'
 
 // The tour is its own chunk: a product that never starts one ships none of it.
 const LazyCoachTour = lazy(() => import('./tour.js'))
@@ -48,6 +49,10 @@ export interface BeaconOnboardingConfig {
   manualComplete?: boolean
   // A guided tour offered from the welcome pane ("Show me around"). Absent -> no tour affordance.
   tour?: { id: string; steps: readonly TourStep[] }
+  // More tours beyond the welcome's. One with autoStart runs by itself, once, the first time its first anchor is
+  // on the page (pickAutoStartTour): e.g. an editor tour the first time the editor opens. The host wires nothing
+  // but the data-beacon-tour anchors. Ids must differ from each other and from `tour`.
+  tours?: readonly BeaconTour[]
   policy?: OnboardingPolicy & { whatsNewOnUpgrade?: boolean }
   // A server-backed store (cross-device) in place of the default local one.
   adapter?: OnboardingAdapter
@@ -70,11 +75,12 @@ export interface BeaconOnboarding {
   tour: ReactNode // render it once, anywhere in the tree
   state: OnboardingState | null // null until loaded (storage is client-only)
   adapter: OnboardingAdapter
-  startTour: () => void
+  // Start a tour by hand: the welcome's by default, or any declared one by id.
+  startTour: (id?: string) => void
 }
 
 export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboarding {
-  const { product, userKey, entries, steps, title, intro, manualComplete, tour, policy, enabled = true, style } = config
+  const { product, userKey, entries, steps, title, intro, manualComplete, tour, tours, policy, enabled = true, style } = config
   const override = config.adapter
   const adapter = useMemo(
     () => override ?? createLocalOnboardingStore({ product, userKey }),
@@ -89,7 +95,8 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
   const [state, setState] = useState<OnboardingState | null>(null)
   const [autoOpen, setAutoOpen] = useState<AutoOpenPanel>()
   const [newVersions, setNewVersions] = useState<string[]>()
-  const [touring, setTouring] = useState(false)
+  // The running tour's id (the welcome's or a declared one), null when none is.
+  const [touring, setTouring] = useState<string | null>(null)
 
   // Decide after mount (never during render: storage is client-only and must not affect SSR), then
   // record the version as seen so What's new opens once per upgrade, not every visit.
@@ -127,7 +134,44 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
     return adapter.subscribe((s) => setState(s))
   }, [adapter, enabled])
 
-  const startTour = useCallback(() => setTouring(true), [])
+  const allTours = useMemo(() => [...(tour ? [tour] : []), ...(tours ?? [])], [tour, tours])
+  const startTour = useCallback(
+    (id?: string) => {
+      const target = id ?? tour?.id
+      if (target && allTours.some((t) => t.id === target)) setTouring(target)
+    },
+    [tour, allTours],
+  )
+
+  // Auto-start: while an autoStart tour is still due and no tour is running, watch the page for its first anchor
+  // and start it the moment it appears (the editor opening, say). One MutationObserver, checked at most once a
+  // frame, disconnected as soon as a tour starts or none is due any more. Client-only, like the rest.
+  const autoTours = useMemo(() => (tours ?? []).filter((t) => t.autoStart), [tours])
+  useEffect(() => {
+    if (!enabled || !state || touring || !autoTours.length || typeof document === 'undefined') return
+    const hasAnchor = (target: string) => document.querySelector(tourAnchorSelector(target)) !== null
+    const due = autoTours.filter((t) => pickAutoStartTour(state, [t], () => true))
+    if (!due.length) return
+    const check = () => {
+      const pick = pickAutoStartTour(state, due, hasAnchor)
+      if (pick) setTouring(pick.id)
+      return Boolean(pick)
+    }
+    if (check() || typeof MutationObserver === 'undefined') return
+    let frame = 0
+    const observer = new MutationObserver(() => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        if (check()) observer.disconnect()
+      })
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [enabled, state, touring, autoTours])
 
   const offer = enabled && !!state && !isChecklistDone(state, steps)
   const renderOnboarding = useMemo(
@@ -147,7 +191,7 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
                   tour
                     ? () => {
                         onClose()
-                        setTouring(true)
+                        setTouring(tour.id)
                       }
                     : undefined
                 }
@@ -158,14 +202,14 @@ export function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboa
     [offer, adapter, steps, title, intro, manualComplete, tour, style],
   )
 
-  const tourNode =
-    touring && tour ? (
-      <div style={style}>
-        <Suspense fallback={null}>
-          <LazyCoachTour adapter={adapter} tourId={tour.id} steps={tour.steps} onClose={() => setTouring(false)} />
-        </Suspense>
-      </div>
-    ) : null
+  const active = touring ? allTours.find((t) => t.id === touring) : undefined
+  const tourNode = active ? (
+    <div style={style}>
+      <Suspense fallback={null}>
+        <LazyCoachTour key={active.id} adapter={adapter} tourId={active.id} steps={active.steps} onClose={() => setTouring(null)} />
+      </Suspense>
+    </div>
+  ) : null
 
   return {
     frame: enabled ? { autoOpen, newVersions, renderOnboarding } : {},

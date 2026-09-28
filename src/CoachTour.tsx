@@ -12,6 +12,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import type { OnboardingAdapter, OnboardingState, TourOutcome, TourStep } from './onboardingTypes.js'
 import { placeTourCard, type CardPlacement, type Rect } from './tourPlacement.js'
 import { TOUR_FOCUSABLE, trapFocusTarget } from './tourFocus.js'
+import { tourAnchorSelector } from './tourAnchor.js'
 
 export interface CoachTourProps {
   adapter: OnboardingAdapter
@@ -25,8 +26,7 @@ const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback}
 const SPOT_PAD = 6
 
 function findAnchor(root: ParentNode, target: string): HTMLElement | null {
-  const esc = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(target) : target.replace(/["\\]/g, '\\$&')
-  return root.querySelector<HTMLElement>(`[data-beacon-tour="${esc}"]`)
+  return root.querySelector<HTMLElement>(tourAnchorSelector(target))
 }
 
 function prefersReducedMotion(): boolean {

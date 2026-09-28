@@ -5,6 +5,7 @@ export interface OnboardingStep {
     action?: {
         label: string;
         onClick: () => void;
+        close?: boolean;
     };
 }
 export type TourOutcome = 'completed' | 'skipped';
@@ -43,4 +44,9 @@ export interface Moment {
     body: string | readonly string[];
     ok?: string;
     repeat?: boolean;
+}
+export interface BeaconTour {
+    id: string;
+    steps: readonly TourStep[];
+    autoStart?: boolean;
 }

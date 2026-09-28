@@ -1,7 +1,7 @@
 import { type CSSProperties, type ReactNode } from 'react';
 import { type AutoOpenPanel } from './onboardingDecide.js';
 import { type VersionedEntry } from './whatsNew.js';
-import type { OnboardingAdapter, OnboardingPolicy, OnboardingState, OnboardingStep, TourStep } from './onboardingTypes.js';
+import type { BeaconTour, OnboardingAdapter, OnboardingPolicy, OnboardingState, OnboardingStep, TourStep } from './onboardingTypes.js';
 export interface BeaconOnboardingConfig {
     product: string;
     userKey?: string;
@@ -16,6 +16,7 @@ export interface BeaconOnboardingConfig {
         id: string;
         steps: readonly TourStep[];
     };
+    tours?: readonly BeaconTour[];
     policy?: OnboardingPolicy & {
         whatsNewOnUpgrade?: boolean;
     };
@@ -35,6 +36,6 @@ export interface BeaconOnboarding {
     tour: ReactNode;
     state: OnboardingState | null;
     adapter: OnboardingAdapter;
-    startTour: () => void;
+    startTour: (id?: string) => void;
 }
 export declare function useBeaconOnboarding(config: BeaconOnboardingConfig): BeaconOnboarding;

@@ -3,7 +3,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decideAutoOpen, newestParseableVersion } from './onboardingDecide.js'
+import { decideAutoOpen, newestParseableVersion, pickAutoStartTour } from './onboardingDecide.js'
 import { emptyOnboardingState } from './onboardingStore.js'
 import type { OnboardingStep } from './onboardingTypes.js'
 
@@ -49,4 +49,35 @@ test('newest parseable version skips an Unreleased heading', () => {
   assert.equal(newestParseableVersion([{ version: '0.9.0' }]), '0.9.0')
   assert.equal(newestParseableVersion([{ version: 'Unreleased' }]), undefined)
   assert.equal(newestParseableVersion([]), undefined)
+})
+
+// pickAutoStartTour: a declared autoStart tour runs once, by itself, when its first anchor is on the page.
+const editorTour = { id: 'editor', autoStart: true, steps: [{ target: 'body', title: 'Write' }, { target: 'publish', title: 'Publish' }] }
+const onPage = (...targets: string[]) => (t: string) => targets.includes(t)
+
+test('an autoStart tour starts when its first anchor is on the page', () => {
+  assert.equal(pickAutoStartTour(emptyOnboardingState(), [editorTour], onPage('body'))?.id, 'editor')
+})
+
+test('an anchor further down the tour does not start it early', () => {
+  assert.equal(pickAutoStartTour(emptyOnboardingState(), [editorTour], onPage('publish')), undefined)
+})
+
+test('a finished, skipped or suppressed tour never auto-starts again', () => {
+  const s = emptyOnboardingState()
+  assert.equal(pickAutoStartTour({ ...s, tours: { editor: 'completed' } }, [editorTour], onPage('body')), undefined)
+  assert.equal(pickAutoStartTour({ ...s, tours: { editor: 'skipped' } }, [editorTour], onPage('body')), undefined)
+  assert.equal(pickAutoStartTour({ ...s, suppressed: true }, [editorTour], onPage('body')), undefined)
+})
+
+test('a tour without autoStart, or without steps, is never picked', () => {
+  const s = emptyOnboardingState()
+  assert.equal(pickAutoStartTour(s, [{ ...editorTour, autoStart: false }], onPage('body')), undefined)
+  assert.equal(pickAutoStartTour(s, [{ id: 'empty', autoStart: true, steps: [] }], () => true), undefined)
+})
+
+test('the first due tour in declaration order wins', () => {
+  const other = { id: 'other', autoStart: true, steps: [{ target: 'body', title: 'Other' }] }
+  const s = { ...emptyOnboardingState(), tours: { editor: 'completed' as const } }
+  assert.equal(pickAutoStartTour(s, [editorTour, other], onPage('body'))?.id, 'other')
 })

@@ -15,7 +15,10 @@ export interface OnboardingStep {
   description?: string
   // An optional call to action the host wires (e.g. "Create your first report" navigates there). The
   // step is ticked when the host calls adapter.completeStep(id), typically when the real action happens.
-  action?: { label: string; onClick: () => void }
+  // close: true closes the pane after the click, for an action that takes the user somewhere (a create dialog,
+  // another screen) the open pane would otherwise sit on top of. Leave it off for an action done in place (copy a
+  // link), so the user sees the step tick.
+  action?: { label: string; onClick: () => void; close?: boolean }
 }
 
 export type TourOutcome = 'completed' | 'skipped'
@@ -79,4 +82,14 @@ export interface Moment {
   body: string | readonly string[] // paragraphs; a string splits on blank lines
   ok?: string // the close button, default "Got it"
   repeat?: boolean
+}
+
+// A tour the product declares beyond the welcome pane's "Show me around" tour. With autoStart, the Beacon starts it
+// BY ITSELF, once, the first time its first step's anchor is on the page (say the editor opens), unless the user
+// already finished or skipped it, or chose "Don't show me this again". The host wires no event: marking the
+// anchor is the whole integration. Without autoStart it runs only when the host calls startTour(id).
+export interface BeaconTour {
+  id: string
+  steps: readonly TourStep[]
+  autoStart?: boolean
 }

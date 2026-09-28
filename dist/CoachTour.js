@@ -11,11 +11,11 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { placeTourCard } from './tourPlacement.js';
 import { TOUR_FOCUSABLE, trapFocusTarget } from './tourFocus.js';
+import { tourAnchorSelector } from './tourAnchor.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
 const SPOT_PAD = 6;
 function findAnchor(root, target) {
-    const esc = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(target) : target.replace(/["\\]/g, '\\$&');
-    return root.querySelector(`[data-beacon-tour="${esc}"]`);
+    return root.querySelector(tourAnchorSelector(target));
 }
 function prefersReducedMotion() {
     try {

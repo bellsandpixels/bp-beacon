@@ -14,13 +14,14 @@ import { jsx as _jsx } from "react/jsx-runtime";
 // returns plain props that AppFrame's renderOnboarding / autoOpen / newVersions accept structurally.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { OnboardingPane } from './OnboardingPane.js';
+import { tourAnchorSelector } from './tourAnchor.js';
 import { createLocalOnboardingStore, isChecklistDone } from './onboardingStore.js';
-import { decideAutoOpen, newestParseableVersion } from './onboardingDecide.js';
+import { decideAutoOpen, newestParseableVersion, pickAutoStartTour } from './onboardingDecide.js';
 import { newestEntryDate, parseVersion, whatsNewSinceLastVisit, whatsNewSinceLastVisitByDate, } from './whatsNew.js';
 // The tour is its own chunk: a product that never starts one ships none of it.
 const LazyCoachTour = lazy(() => import('./tour.js'));
 export function useBeaconOnboarding(config) {
-    const { product, userKey, entries, steps, title, intro, manualComplete, tour, policy, enabled = true, style } = config;
+    const { product, userKey, entries, steps, title, intro, manualComplete, tour, tours, policy, enabled = true, style } = config;
     const override = config.adapter;
     const adapter = useMemo(() => override ?? createLocalOnboardingStore({ product, userKey }), [override, product, userKey]);
     const whatsNewKey = config.whatsNewKey ?? 'version';
@@ -30,7 +31,8 @@ export function useBeaconOnboarding(config) {
     const [state, setState] = useState(null);
     const [autoOpen, setAutoOpen] = useState();
     const [newVersions, setNewVersions] = useState();
-    const [touring, setTouring] = useState(false);
+    // The running tour's id (the welcome's or a declared one), null when none is.
+    const [touring, setTouring] = useState(null);
     // Decide after mount (never during render: storage is client-only and must not affect SSR), then
     // record the version as seen so What's new opens once per upgrade, not every visit.
     useEffect(() => {
@@ -69,17 +71,59 @@ export function useBeaconOnboarding(config) {
             return;
         return adapter.subscribe((s) => setState(s));
     }, [adapter, enabled]);
-    const startTour = useCallback(() => setTouring(true), []);
+    const allTours = useMemo(() => [...(tour ? [tour] : []), ...(tours ?? [])], [tour, tours]);
+    const startTour = useCallback((id) => {
+        const target = id ?? tour?.id;
+        if (target && allTours.some((t) => t.id === target))
+            setTouring(target);
+    }, [tour, allTours]);
+    // Auto-start: while an autoStart tour is still due and no tour is running, watch the page for its first anchor
+    // and start it the moment it appears (the editor opening, say). One MutationObserver, checked at most once a
+    // frame, disconnected as soon as a tour starts or none is due any more. Client-only, like the rest.
+    const autoTours = useMemo(() => (tours ?? []).filter((t) => t.autoStart), [tours]);
+    useEffect(() => {
+        if (!enabled || !state || touring || !autoTours.length || typeof document === 'undefined')
+            return;
+        const hasAnchor = (target) => document.querySelector(tourAnchorSelector(target)) !== null;
+        const due = autoTours.filter((t) => pickAutoStartTour(state, [t], () => true));
+        if (!due.length)
+            return;
+        const check = () => {
+            const pick = pickAutoStartTour(state, due, hasAnchor);
+            if (pick)
+                setTouring(pick.id);
+            return Boolean(pick);
+        };
+        if (check() || typeof MutationObserver === 'undefined')
+            return;
+        let frame = 0;
+        const observer = new MutationObserver(() => {
+            if (frame)
+                return;
+            frame = requestAnimationFrame(() => {
+                frame = 0;
+                if (check())
+                    observer.disconnect();
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        return () => {
+            observer.disconnect();
+            if (frame)
+                cancelAnimationFrame(frame);
+        };
+    }, [enabled, state, touring, autoTours]);
     const offer = enabled && !!state && !isChecklistDone(state, steps);
     const renderOnboarding = useMemo(() => offer
         ? ({ onClose }) => (_jsx("div", { style: style, children: _jsx(OnboardingPane, { adapter: adapter, steps: steps, title: title, intro: intro, manualComplete: manualComplete, onClose: onClose, onStateChange: setState, onStartTour: tour
                     ? () => {
                         onClose();
-                        setTouring(true);
+                        setTouring(tour.id);
                     }
                     : undefined }) }))
         : undefined, [offer, adapter, steps, title, intro, manualComplete, tour, style]);
-    const tourNode = touring && tour ? (_jsx("div", { style: style, children: _jsx(Suspense, { fallback: null, children: _jsx(LazyCoachTour, { adapter: adapter, tourId: tour.id, steps: tour.steps, onClose: () => setTouring(false) }) }) })) : null;
+    const active = touring ? allTours.find((t) => t.id === touring) : undefined;
+    const tourNode = active ? (_jsx("div", { style: style, children: _jsx(Suspense, { fallback: null, children: _jsx(LazyCoachTour, { adapter: adapter, tourId: active.id, steps: active.steps, onClose: () => setTouring(null) }, active.id) }) })) : null;
     return {
         frame: enabled ? { autoOpen, newVersions, renderOnboarding } : {},
         tour: tourNode,
