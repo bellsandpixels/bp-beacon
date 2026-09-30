@@ -2,14 +2,17 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 // The shared, design-system-agnostic first-time MOMENT explainer: a small modal the Beacon opens the first time
 // the user does something that needs explaining (see moments.ts). Themed entirely by --beacon-* CSS variables
 // with neutral fallbacks, like OnboardingPane. Accessible: role="dialog" + aria-modal, labelled by its title,
-// focus lands on the close button, and Escape or the backdrop closes it. A repeating moment carries a
+// focus lands on the close button, and Escape or a press outside the card closes it. The backdrop is visual only: a
+// press outside the card closes the explainer AND reaches what was pressed (pointer-events pass through the scrim), so
+// the explainer never silently eats the user's next action (toudai F16: a Save explainer swallowed the first Publish). A repeating moment carries a
 // "Don't show this again" checkbox; a once-only moment needs none (closing it is final).
 import { useEffect, useId, useRef, useState } from 'react';
-import { momentParagraphs } from './moments.js';
+import { isOutsideCard, momentParagraphs } from './moments.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
 export function MomentPane({ moment, onClose }) {
     const [dontShow, setDontShow] = useState(false);
     const okRef = useRef(null);
+    const cardRef = useRef(null);
     const titleId = useId();
     // The latest checkbox value for the Escape handler, without re-binding it on every toggle.
     const dontShowRef = useRef(dontShow);
@@ -20,13 +23,20 @@ export function MomentPane({ moment, onClose }) {
             if (e.key === 'Escape')
                 onClose(dontShowRef.current);
         };
+        // Capture phase, never preventDefault: the press closes the explainer and still lands on its target.
+        const onPointer = (e) => {
+            if (isOutsideCard(e.target, cardRef.current))
+                onClose(dontShowRef.current);
+        };
         window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
+        window.addEventListener('pointerdown', onPointer, true);
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            window.removeEventListener('pointerdown', onPointer, true);
+        };
     }, [onClose]);
-    return (_jsx("div", { "data-beacon-moment": moment.id, onMouseDown: (e) => {
-            if (e.target === e.currentTarget)
-                onClose(dontShow);
-        }, style: {
+    return (_jsx("div", { "data-beacon-moment": moment.id, style: {
+            pointerEvents: 'none',
             position: 'fixed',
             inset: 0,
             zIndex: v('moment-z', '60'),
@@ -37,7 +47,8 @@ export function MomentPane({ moment, onClose }) {
             padding: '10vh 16px',
             background: v('moment-scrim', 'rgba(15,17,21,.4)'),
             backdropFilter: 'blur(4px)',
-        }, children: _jsxs("div", { role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, style: {
+        }, children: _jsxs("div", { ref: cardRef, role: "dialog", "aria-modal": "false", "aria-labelledby": titleId, style: {
+                pointerEvents: 'auto',
                 width: '100%',
                 maxWidth: 448,
                 boxSizing: 'border-box',

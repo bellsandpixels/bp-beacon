@@ -42,6 +42,16 @@ export function withMomentOutcome(state, momentId, outcome) {
     return { ...state, moments: { ...state.moments, [momentId]: outcome } };
 }
 // The explainer's paragraphs: an array as given, a string split on blank lines. Empty paragraphs are dropped.
+/** Whether a pointer press landed outside the explainer card (so it closes the moment and passes through to the page).
+ *  DOM-free for the node test runner: anything with a `contains` method stands in for the card element. A missing
+ *  card (not mounted yet) never closes. */
+export function isOutsideCard(target, card) {
+    if (!card)
+        return false;
+    if (!target || typeof target !== 'object')
+        return true;
+    return !card.contains(target);
+}
 export function momentParagraphs(body) {
     const parts = typeof body === 'string' ? body.split(/\n\s*\n/) : [...body];
     return parts.map((p) => p.trim()).filter(Boolean);
