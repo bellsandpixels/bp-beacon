@@ -3,7 +3,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { findMoment, momentOutcome, momentParagraphs, shouldShowMoment, withMomentOutcome } from './moments.js'
+import { findMoment, isOutsideCard, momentOutcome, momentParagraphs, shouldShowMoment, withMomentOutcome } from './moments.js'
 import { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState } from './onboardingStore.js'
 import type { Moment, OnboardingState } from './onboardingTypes.js'
 
@@ -90,4 +90,15 @@ test('the local store records a moment in the same persisted record and notifies
   // A second user on the same browser is untouched.
   const other = createLocalOnboardingStore({ product: 'toudai', userKey: 'u2', storage })
   assert.deepEqual((await other.load()).moments, {})
+})
+
+// A press outside the explainer card closes it and passes through to the page (toudai F16: the Save explainer's
+// scrim swallowed the first Publish click). Inside the card never closes; no card mounted never closes.
+test('isOutsideCard: outside closes, inside does not, no card never does', () => {
+  const inside = { id: 'inside' }
+  const card = { contains: (n: never) => (n as unknown) === inside }
+  assert.equal(isOutsideCard({ id: 'publish-button' }, card), true)
+  assert.equal(isOutsideCard(inside, card), false)
+  assert.equal(isOutsideCard({ id: 'x' }, null), false)
+  assert.equal(isOutsideCard(null, card), true)
 })
