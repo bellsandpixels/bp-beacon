@@ -7,11 +7,23 @@
 //
 // Kept in its own module (and the "@bp/beacon/tour" subpath) so a product can lazy-load it: a product
 // that never runs a tour ships none of it.
+//
+// Two defects fixed here (toudai tdi-q4-studio-tour-overlay-scoped, seen live on the B&P Studio):
+//   1. A step's anchor was only ever checked at mount (the `live` filter below). If the surface or editor it
+//      points at closed later (a Delete from the editor lands on the Recycle bin), the tour kept showing its
+//      spotlight and scrim over whatever replaced it. Fixed by watching the current step's anchor for the
+//      rest of the tour, not just once at the start, and withdrawing (closing unrecorded, like the existing
+//      no-anchors-at-all case) the moment it is gone.
+//   2. The document-wide focus trap assumed the tour was the only modal on the page: any focus landing
+//      outside the card was yanked straight back onto it. A dialog the host opens on top of the tour (the
+//      Studio "New" dialog, which auto-focuses its title field on open) got its focus stolen back instantly,
+//      so typing never reached it until "Skip for now" closed the tour. Fixed by recognizing any OTHER open
+//      aria-modal dialog and standing down for it entirely (no re-trap, no click-shield) while it is open.
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { OnboardingAdapter, OnboardingState, TourOutcome, TourStep } from './onboardingTypes.js'
 import { placeTourCard, type CardPlacement, type Rect } from './tourPlacement.js'
-import { TOUR_FOCUSABLE, trapFocusTarget } from './tourFocus.js'
+import { TOUR_FOCUSABLE, hasOtherOpenDialog, shouldRetrapFocus, trapFocusTarget } from './tourFocus.js'
 import { tourAnchorSelector } from './tourAnchor.js'
 
 export interface CoachTourProps {
@@ -24,6 +36,7 @@ export interface CoachTourProps {
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
 const SPOT_PAD = 6
+const OTHER_DIALOG_SELECTOR = '[aria-modal="true"]'
 
 function findAnchor(root: ParentNode, target: string): HTMLElement | null {
   return root.querySelector<HTMLElement>(tourAnchorSelector(target))
@@ -45,6 +58,9 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
   const [rect, setRect] = useState<Rect | null>(null)
   const [place, setPlace] = useState<CardPlacement | null>(null)
   const [state, setState] = useState<OnboardingState | null>(null)
+  // Whether a dialog the HOST opened (the "New" dialog, a delete confirm) is currently up on top of the
+  // tour. While one is, the tour stands down entirely: see the render guard near the bottom.
+  const [otherDialogOpen, setOtherDialogOpen] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const ending = useRef(false)
   const titleId = useId()
@@ -76,14 +92,71 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
     [adapter, tourId, onClose],
   )
 
-  // No anchors on the page: nothing to show. Close WITHOUT recording, so the tour can run on a later
-  // visit when its anchors exist.
+  // Close without recording an outcome, so the tour is free to run again on a later visit: used when there
+  // is nothing left on the page to show it against, never when the user chose to skip it.
+  const withdraw = useCallback(() => {
+    if (ending.current) return
+    ending.current = true
+    onClose('skipped')
+  }, [onClose])
+
+  // No anchors on the page at all: nothing to show. Withdraw unrecorded.
   useEffect(() => {
-    if (!live.length && !ending.current) {
-      ending.current = true
-      onClose('skipped')
+    if (!live.length) withdraw()
+  }, [live.length, withdraw])
+
+  // The current step's anchor can disappear mid-tour: the surface or editor it points at just closed (a
+  // Delete from the editor lands on the Recycle bin, say). Watch for that for as long as this step is
+  // showing and withdraw the moment it happens, rather than keep the spotlight and scrim floating over
+  // whatever surface replaced it. A MutationObserver on the document body, checked at most once a frame,
+  // mirrors the pattern useBeaconOnboarding's auto-start watch uses for the opposite direction (an anchor
+  // APPEARING); this one watches for one DISAPPEARING.
+  useEffect(() => {
+    if (!step || !scope || typeof document === 'undefined' || typeof MutationObserver === 'undefined') return
+    const stillThere = () => Boolean(findAnchor(scope, step.target))
+    if (!stillThere()) {
+      withdraw()
+      return
     }
-  }, [live.length, onClose])
+    let frame = 0
+    const observer = new MutationObserver(() => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        if (!stillThere()) withdraw()
+      })
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [step, scope, withdraw])
+
+  // Whether some other aria-modal dialog is open right now, checked the same rAF-throttled way. Recomputed
+  // on every mutation so the tour stands back down the instant such a dialog opens and comes right back the
+  // instant it closes, at the step and position it left off at.
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return
+    const check = () => {
+      const dialogs = Array.from(document.querySelectorAll<HTMLElement>(OTHER_DIALOG_SELECTOR))
+      setOtherDialogOpen(hasOtherOpenDialog(cardRef.current, dialogs))
+    }
+    check()
+    let frame = 0
+    const observer = new MutationObserver(() => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        check()
+      })
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [])
 
   // Measure the anchor and place the card; re-measure on scroll and resize.
   const measure = useCallback(() => {
@@ -108,19 +181,25 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
   }, [step, scope, measure])
 
   // Focus the card once it is placed (a visibility:hidden card cannot take focus), so Esc and the arrow
-  // keys work from the first step without a click.
+  // keys work from the first step without a click. Not while another dialog is open: that dialog owns focus.
   const placed = place !== null
   useEffect(() => {
-    if (placed) cardRef.current?.focus({ preventScroll: true })
-  }, [step, placed])
+    if (placed && !otherDialogOpen) cardRef.current?.focus({ preventScroll: true })
+  }, [step, placed, otherDialogOpen])
 
   // Keep focus inside the card while the tour runs: if anything moves it onto the page underneath (a
-  // script, an assistive-tech jump), bring it back, so the modal promise of aria-modal holds.
+  // script, an assistive-tech jump), bring it back, so the modal promise of aria-modal holds. But not when
+  // focus moved into a dialog the host opened on top of the tour instead: that dialog is its own modal and
+  // owns focus while it is up (see tourFocus.ts, shouldRetrapFocus).
   useEffect(() => {
     if (!step) return
     const onFocusIn = (e: FocusEvent) => {
       const card = cardRef.current
-      if (card && e.target instanceof Node && !card.contains(e.target)) card.focus({ preventScroll: true })
+      if (!card || !(e.target instanceof Node)) return
+      const targetInCard = card.contains(e.target)
+      const targetEl = e.target instanceof Element ? e.target : e.target.parentElement
+      const targetInOtherDialog = Boolean(targetEl?.closest(OTHER_DIALOG_SELECTOR) && !targetInCard)
+      if (shouldRetrapFocus(targetInCard, targetInOtherDialog)) card.focus({ preventScroll: true })
     }
     document.addEventListener('focusin', onFocusIn)
     return () => document.removeEventListener('focusin', onFocusIn)
@@ -165,7 +244,10 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
     }
   }
 
-  if (!step) return null
+  // Stand down entirely while a dialog the host opened is on top: no card to swallow Tab or Esc, no
+  // click-shield to swallow a click meant for the dialog below it. The tour reappears, at the same step, the
+  // moment that dialog closes (the effects above keep running; only the render output pauses).
+  if (!step || otherDialogOpen) return null
 
   const quiet: React.CSSProperties = {
     font: 'inherit',
