@@ -22,7 +22,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 //      aria-modal dialog and standing down for it entirely (no re-trap, no click-shield) while it is open.
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { placeTourCard } from './tourPlacement.js';
-import { TOUR_FOCUSABLE, hasOtherOpenDialog, shouldRetrapFocus, trapFocusTarget } from './tourFocus.js';
+import { TOUR_FOCUSABLE, hasOtherOpenDialog, isDialogShown, shouldRetrapFocus, trapFocusTarget } from './tourFocus.js';
 import { tourAnchorSelector } from './tourAnchor.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
 const SPOT_PAD = 6;
@@ -189,7 +189,8 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }) {
                 return;
             const targetInCard = card.contains(e.target);
             const targetEl = e.target instanceof Element ? e.target : e.target.parentElement;
-            const targetInOtherDialog = Boolean(targetEl?.closest(OTHER_DIALOG_SELECTOR) && !targetInCard);
+            const hostDialog = targetEl?.closest(OTHER_DIALOG_SELECTOR);
+            const targetInOtherDialog = Boolean(hostDialog && !targetInCard && isDialogShown(hostDialog));
             if (shouldRetrapFocus(targetInCard, targetInOtherDialog))
                 card.focus({ preventScroll: true });
         };
