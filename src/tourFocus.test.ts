@@ -5,7 +5,14 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { hasOtherOpenDialog, shouldRetrapFocus, trapFocusTarget } from './tourFocus.js'
+import { HIDDEN_DIALOG_SCOPE, hasOtherOpenDialog, isDialogShown, shouldRetrapFocus, trapFocusTarget, type DialogLike } from './tourFocus.js'
+
+// A fake aria-modal element: shown (no hiding ancestor, renders a box), under a hiding ancestor (a closed
+// AppFrame pane's aria-hidden wrapper), or not rendered at all (display:none, no client rects).
+const dialog = ({ hidden = false, rects = 1 } = {}): DialogLike => ({
+  closest: (selector: string) => (hidden && selector === HIDDEN_DIALOG_SCOPE ? {} : null),
+  getClientRects: () => ({ length: rects }),
+})
 
 test('Tab on the last control wraps to the first', () => {
   assert.equal(trapFocusTarget(3, 4, false), 0)
@@ -52,14 +59,31 @@ test('shouldRetrapFocus: in-card-and-in-a-dialog is unreachable in practice, but
 })
 
 test('hasOtherOpenDialog: only the tour\'s own card is an aria-modal element', () => {
-  const card = {}
+  const card = dialog()
   assert.equal(hasOtherOpenDialog(card, [card]), false)
 })
 
 test('hasOtherOpenDialog: a second aria-modal dialog is open (the New dialog, a delete confirm)', () => {
-  const card = {}
-  const otherDialog = {}
+  const card = dialog()
+  const otherDialog = dialog()
   assert.equal(hasOtherOpenDialog(card, [card, otherDialog]), true)
+})
+
+test('hasOtherOpenDialog: closed panels that stay mounted (the AppFrame panes) do not stand the tour down', () => {
+  const card = dialog()
+  const closedPanes = [dialog({ hidden: true }), dialog({ hidden: true }), dialog({ hidden: true }), dialog({ hidden: true })]
+  assert.equal(hasOtherOpenDialog(card, [...closedPanes, card]), false)
+})
+
+test('hasOtherOpenDialog: an open dialog still counts among closed panels', () => {
+  const card = dialog()
+  assert.equal(hasOtherOpenDialog(card, [dialog({ hidden: true }), card, dialog()]), true)
+})
+
+test('isDialogShown: a hiding ancestor or no rendered box means closed', () => {
+  assert.equal(isDialogShown(dialog()), true)
+  assert.equal(isDialogShown(dialog({ hidden: true })), false)
+  assert.equal(isDialogShown(dialog({ rects: 0 })), false)
 })
 
 test('hasOtherOpenDialog: no dialogs at all', () => {
@@ -67,5 +91,5 @@ test('hasOtherOpenDialog: no dialogs at all', () => {
 })
 
 test('hasOtherOpenDialog: the tour has not mounted a card yet, but a dialog is already open', () => {
-  assert.equal(hasOtherOpenDialog(null, [{}]), true)
+  assert.equal(hasOtherOpenDialog(null, [dialog()]), true)
 })

@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { OnboardingAdapter, OnboardingState, TourOutcome, TourStep } from './onboardingTypes.js'
 import { placeTourCard, type CardPlacement, type Rect } from './tourPlacement.js'
-import { TOUR_FOCUSABLE, hasOtherOpenDialog, shouldRetrapFocus, trapFocusTarget } from './tourFocus.js'
+import { TOUR_FOCUSABLE, hasOtherOpenDialog, isDialogShown, shouldRetrapFocus, trapFocusTarget } from './tourFocus.js'
 import { tourAnchorSelector } from './tourAnchor.js'
 
 export interface CoachTourProps {
@@ -198,7 +198,8 @@ export function CoachTour({ adapter, tourId, steps, onClose, root }: CoachTourPr
       if (!card || !(e.target instanceof Node)) return
       const targetInCard = card.contains(e.target)
       const targetEl = e.target instanceof Element ? e.target : e.target.parentElement
-      const targetInOtherDialog = Boolean(targetEl?.closest(OTHER_DIALOG_SELECTOR) && !targetInCard)
+      const hostDialog = targetEl?.closest<HTMLElement>(OTHER_DIALOG_SELECTOR)
+      const targetInOtherDialog = Boolean(hostDialog && !targetInCard && isDialogShown(hostDialog))
       if (shouldRetrapFocus(targetInCard, targetInOtherDialog)) card.focus({ preventScroll: true })
     }
     document.addEventListener('focusin', onFocusIn)
