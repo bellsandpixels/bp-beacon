@@ -8,6 +8,7 @@
 // and live wiring land in Phase B. See the approved Beacon walk mocks.
 
 import { useCallback, useEffect, useState } from 'react'
+import { groupAssignments } from './walkList.js'
 import type { WalkAdapter, WalkAssignmentSummary, WalkAvailability, WalkInProgress, WalkSummary, WalkIssue, WalkIdentity } from './walkTypes.js'
 
 export interface WalkPaneProps {
@@ -19,9 +20,18 @@ export interface WalkPaneProps {
   // starts the walk with its assignmentId, so the completed walk clears the card and advances the stage).
   // Omitted -> the assigned cards render without a Start (display-only, the pre-B2 behavior).
   onStartAssignment?: (assignment: WalkAssignmentSummary) => void
+  // A one-line confirmation the host shows above the list, e.g. "Walk saved" after the tester leaves a walk
+  // part-way (progress is server-side, so leaving never loses it). onDismissNotice adds a close control.
+  notice?: string | null
+  onDismissNotice?: () => void
 }
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
+
+type HubTab = 'todo' | 'completed' | 'issues'
+
+// How many walks a build group shows before "Show N more".
+const GROUP_PAGE = 6
 
 // Reporter-facing disposition labels. A resolved issue is a DISTINCT "Fixed in build X" state (never a
 // bare Closed): that is rendered from WalkIssue.resolvedBuild, ahead of this map.
@@ -36,26 +46,10 @@ const STATUS_LABEL: Record<WalkIssue['status'], string> = {
   closed: 'Closed',
 }
 
-function Zone({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section style={{ display: 'grid', gap: 8 }}>
-      <div
-        style={{
-          fontFamily: v('mono', 'ui-monospace, monospace'),
-          fontSize: 11,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          opacity: 0.65,
-        }}
-      >
-        {label}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-export function WalkPane({ adapter, onStartWalk, onStartAssignment }: WalkPaneProps) {
+export function WalkPane({ adapter, onStartWalk, onStartAssignment, notice, onDismissNotice }: WalkPaneProps) {
+  const [tab, setTab] = useState<HubTab>('todo')
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [showAll, setShowAll] = useState<Record<string, boolean>>({})
   const [identity, setIdentity] = useState<WalkIdentity | null>(null)
   const [availability, setAvailability] = useState<WalkAvailability | null>(null)
   const [inProgress, setInProgress] = useState<WalkInProgress | null>(null)
@@ -165,156 +159,235 @@ export function WalkPane({ adapter, onStartWalk, onStartAssignment }: WalkPanePr
     return <div style={base}><span style={{ opacity: 0.6, fontSize: 13 }}>Loading your walk...</span></div>
   }
 
+  const todo = groupAssignments(assigned)
+  const offered = !!availability?.offered
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, padding: '8px 0' }
+  const mono: React.CSSProperties = { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.65 }
+  const startBtn = (primary: boolean): React.CSSProperties => ({
+    padding: '5px 12px',
+    borderRadius: v('radius', '8px'),
+    border: primary ? 'none' : `1px solid ${v('border', '#d0d0d0')}`,
+    background: primary ? v('accent', '#9B251B') : 'transparent',
+    color: primary ? v('accent-fg', '#fff') : v('fg', '#1a1a1a'),
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+  })
+
+  const tabs: { key: HubTab; label: string; count: number }[] = [
+    { key: 'todo', label: 'To do', count: assigned.length },
+    { key: 'completed', label: 'Completed', count: completed.length },
+    { key: 'issues', label: 'My issues', count: issues.length },
+  ]
+
   return (
     <div style={base}>
       {error ? <p style={{ margin: 0, color: v('error', '#9B251B'), fontSize: 13 }}>{error}</p> : null}
 
-      <Zone label="To do">
-        {/* Slice 4c: the tester's ASSIGNED walks (from listAssigned -> GET /api/walk/available), the
-            personalized "what is assigned to me" list. Rendered above the current-build launch card; hidden
-            when the adapter has no listAssigned or the tester has none open. */}
-        {assigned.length ? (
-          <div style={{ display: 'grid', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 11, opacity: 0.6 }}>Assigned to you ({assigned.length})</span>
-            {assigned.map((a) => (
-              <div
-                key={a.id}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13 }}>{a.catalogueId}</div>
-                  <div style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }}>
-                    {a.build}
-                    {a.env ? ` (${a.env})` : ''}
-                    {typeof a.ring === 'number' ? ` · ring ${a.ring}` : ''}
-                    {a.status ? ` · ${a.status}` : ''}
-                  </div>
-                </div>
-                {/* B2: launch THIS assignment's walk. Hidden (display-only) when the host wires no
-                    onStartAssignment, so a scaffold / pre-B2 host keeps the old behavior. */}
-                {onStartAssignment ? (
-                  <button
-                    onClick={() => onStartAssignment(a)}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: v('radius', '8px'),
-                      border: 'none',
-                      background: v('accent', '#9B251B'),
-                      color: v('accent-fg', '#fff'),
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Start walk
-                  </button>
-                ) : null}
+      {/* The build being walked comes first: it is the one walk every tester is asked for. */}
+      {offered && availability ? (
+        <div
+          data-testid="walk-this-build"
+          style={{
+            border: `1px solid ${v('border', '#d0d0d0')}`,
+            borderLeft: `3px solid ${v('accent', '#9B251B')}`,
+            borderRadius: v('radius', '10px'),
+            padding: 12,
+            display: 'grid',
+            gap: 6,
+          }}
+        >
+          <span style={{ ...mono, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            {inProgress ? 'Resume your walk' : 'Walk this build'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* When resuming, name the walk's OWN build/env (an older unsubmitted walk is resumed as-is; the
+                  start/current queries carry no build filter), not the current offer's, so the card is honest. */}
+              <strong style={{ fontFamily: v('serif', 'inherit') }}>{inProgress?.build || availability.build}</strong>
+              <div style={mono}>
+                {inProgress?.env || availability.env}
+                {inProgress
+                  ? ` · ${inProgress.coverage.total > 0 ? `${inProgress.coverage.walked} / ${inProgress.coverage.total}` : inProgress.coverage.walked} walked${inProgress.flagged ? ` · ${inProgress.flagged} flagged` : ''}`
+                  : ''}
               </div>
-            ))}
-          </div>
-        ) : null}
-        {availability?.offered ? (
-          <div
-            style={{
-              border: `1px solid ${v('border', '#d0d0d0')}`,
-              borderLeft: `3px solid ${v('accent', '#9B251B')}`,
-              borderRadius: v('radius', '10px'),
-              padding: 12,
-              display: 'grid',
-              gap: 8,
-            }}
-          >
-            {/* Announce a resume up front: start() returns the tester's existing unsubmitted walk (never
-                forks one), so without this the pre-filled coverage reads as "it carried over the last walk". */}
-            <strong style={{ fontFamily: v('serif', 'inherit') }}>
-              {inProgress ? 'Resume your walk' : 'Walk this build'}
-            </strong>
-            {/* When resuming, name the walk's OWN build/env (an older unsubmitted walk is resumed as-is; the
-                start/current queries carry no build filter), not the current offer's, so the card is honest. */}
-            <span style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.8 }}>
-              {(inProgress?.build || availability.build)} ({inProgress?.env || availability.env})
-            </span>
-            {inProgress ? (
-              <span style={{ fontSize: 12, opacity: 0.75 }}>
-                In progress:{' '}
-                {inProgress.coverage.total > 0
-                  ? `${inProgress.coverage.walked} / ${inProgress.coverage.total} walked`
-                  : `${inProgress.coverage.walked} walked`}
-                {inProgress.flagged ? ` · ${inProgress.flagged} flagged` : ''} · picks up where you left off
-              </span>
-            ) : null}
+            </div>
             <button
-              onClick={() => (onStartWalk && availability ? onStartWalk(availability) : undefined)}
+              onClick={() => (onStartWalk ? onStartWalk(availability) : undefined)}
               disabled={!onStartWalk}
-              style={{
-                padding: '6px 12px',
-                borderRadius: v('radius', '8px'),
-                border: 'none',
-                background: onStartWalk ? v('accent', '#9B251B') : v('border', '#d0d0d0'),
-                color: v('accent-fg', '#fff'),
-                cursor: onStartWalk ? 'pointer' : 'not-allowed',
-                justifySelf: 'start',
-              }}
+              style={{ ...startBtn(true), padding: '8px 16px', fontSize: 13, cursor: onStartWalk ? 'pointer' : 'not-allowed' }}
             >
               {inProgress ? 'Resume walk' : 'Start walk'}
             </button>
           </div>
-        ) : (
-          <span style={{ fontSize: 13, opacity: 0.6 }}>No walk is offered for this build.</span>
-        )}
-      </Zone>
+        </div>
+      ) : null}
 
-      <Zone label="Completed">
-        {completed.length ? (
-          completed.map((w) => (
-            <div key={w.walkId} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 13 }}>{w.build}</div>
-                <div style={{ fontSize: 11, opacity: 0.6 }}>
-                  {w.coverage.walked} / {w.coverage.total} walked{w.flagged ? ` · ${w.flagged} flagged` : ''}
+      {notice ? (
+        <div
+          role="status"
+          style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', borderRadius: v('radius', '8px'), background: v('ok-bg', '#e7efe4'), color: v('ok', '#2f6d3a'), fontSize: 13 }}
+        >
+          <span style={{ flex: 1 }}>{notice}</span>
+          {onDismissNotice ? (
+            <button onClick={onDismissNotice} aria-label="Dismiss" style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 14 }}>
+              ×
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div role="tablist" style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${v('border', '#e4ddcd')}` }}>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: '6px 10px',
+              border: 'none',
+              borderBottom: `2px solid ${tab === t.key ? v('accent', '#9B251B') : 'transparent'}`,
+              background: 'transparent',
+              color: v('fg', '#1a1a1a'),
+              opacity: tab === t.key ? 1 : 0.65,
+              fontWeight: tab === t.key ? 600 : 400,
+              fontSize: 13,
+              cursor: 'pointer',
+              marginBottom: -1,
+            }}
+          >
+            {t.label}{' '}
+            <span style={{ fontSize: 11, padding: '0 6px', borderRadius: 999, background: v('chip-bg', '#f0f0f0') }}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {tab === 'todo' ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {!assigned.length ? <span style={{ fontSize: 13, opacity: 0.6 }}>Nothing assigned to you right now.</span> : null}
+          {todo.inProgress.length ? (
+            <section style={{ display: 'grid' }}>
+              <span style={{ ...mono, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>In progress</span>
+              {todo.inProgress.map((a) => (
+                <div key={a.id} style={row}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13 }}>{a.catalogueId}</div>
+                    <div style={mono}>{a.build}{a.env ? ` · ${a.env}` : ''}</div>
+                  </div>
+                  {onStartAssignment ? (
+                    <button onClick={() => onStartAssignment(a)} style={startBtn(true)}>
+                      Resume
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </section>
+          ) : null}
+          {todo.groups.map((g, i) => {
+            // The newest build is unfolded; older builds start folded so the list stays short.
+            const isOpen = open[g.build] ?? i === 0
+            const all = !!showAll[g.build]
+            const rows = all ? g.assignments : g.assignments.slice(0, GROUP_PAGE)
+            return (
+              <section key={g.build} style={{ border: `1px solid ${v('border', '#e4ddcd')}`, borderRadius: v('radius', '10px'), padding: '0 10px' }}>
+                <button
+                  onClick={() => setOpen((o) => ({ ...o, [g.build]: !isOpen }))}
+                  aria-expanded={isOpen}
+                  style={{ display: 'flex', width: '100%', alignItems: 'baseline', gap: 8, padding: '8px 0', border: 'none', background: 'transparent', color: v('fg', '#1a1a1a'), cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <span style={{ opacity: 0.6, width: 10 }}>{isOpen ? '▾' : '▸'}</span>
+                  <strong style={{ fontSize: 13 }}>{g.build}</strong>
+                  <span style={mono}>
+                    {g.env ? `${g.env} · ` : ''}
+                    {g.assignments.length} {g.assignments.length === 1 ? 'walk' : 'walks'}
+                  </span>
+                </button>
+                {isOpen ? (
+                  <>
+                    {rows.map((a) => (
+                      <div key={a.id} style={row}>
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{a.catalogueId}</div>
+                        {onStartAssignment ? (
+                          <button onClick={() => onStartAssignment(a)} style={startBtn(false)}>
+                            Start
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                    {g.assignments.length > GROUP_PAGE ? (
+                      <button
+                        onClick={() => setShowAll((s) => ({ ...s, [g.build]: !all }))}
+                        style={{ border: 'none', background: 'transparent', color: v('accent', '#9B251B'), padding: '6px 0 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                      >
+                        {all ? 'Show fewer' : `Show ${g.assignments.length - GROUP_PAGE} more`}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </section>
+            )
+          })}
+          {!offered && !assigned.length ? <span style={{ fontSize: 13, opacity: 0.6 }}>No walk is offered for this build.</span> : null}
+        </div>
+      ) : null}
+
+      {tab === 'completed' ? (
+        <div style={{ display: 'grid' }}>
+          {completed.length ? (
+            completed.map((w) => (
+              <div key={w.walkId} style={row}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 13 }}>{w.build}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>
+                    {w.coverage.walked} / {w.coverage.total} walked{w.flagged ? ` · ${w.flagged} flagged` : ''}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
-        ) : (
-          <span style={{ fontSize: 13, opacity: 0.6 }}>No completed walks yet.</span>
-        )}
-      </Zone>
+            ))
+          ) : (
+            <span style={{ fontSize: 13, opacity: 0.6 }}>No completed walks yet.</span>
+          )}
+        </div>
+      ) : null}
 
-      <Zone label="My issues">
-        {issues.length ? (
-          issues.map((it) => (
-            <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: `1px solid ${v('border', '#eee')}`, paddingTop: 8 }}>
-              <span style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }}>#{it.checkRef}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13 }}>{it.title}</div>
-                <div style={{ fontSize: 11, opacity: 0.6 }}>raised on {it.build}</div>
-                {it.resolution ? (
-                  <div style={{ fontSize: 12, opacity: 0.85, marginTop: 3 }}>
-                    <b>{it.resolutionKind === 'clarified' ? 'Clarified:' : 'Fixed:'}</b> {it.resolution}
-                  </div>
-                ) : null}
+      {tab === 'issues' ? (
+        <div style={{ display: 'grid' }}>
+          {issues.length ? (
+            issues.map((it) => (
+              <div key={it.id} style={row}>
+                <span style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }}>#{it.checkRef}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13 }}>{it.title}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>raised on {it.build}</div>
+                  {it.resolution ? (
+                    <div style={{ fontSize: 12, opacity: 0.85, marginTop: 3 }}>
+                      <b>{it.resolutionKind === 'clarified' ? 'Clarified:' : 'Fixed:'}</b> {it.resolution}
+                    </div>
+                  ) : null}
+                </div>
+                <span
+                  style={{
+                    fontFamily: v('mono', 'ui-monospace, monospace'),
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: it.resolvedBuild ? v('ok-bg', '#e7efe4') : v('chip-bg', '#f0f0f0'),
+                    color: it.resolvedBuild ? v('ok', '#2f6d3a') : v('fg', '#1a1a1a'),
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {it.resolvedBuild ? `${it.resolutionKind === 'clarified' ? 'Clarified' : 'Fixed'} ${it.resolvedBuild}` : STATUS_LABEL[it.status]}
+                </span>
               </div>
-              <span
-                style={{
-                  fontFamily: v('mono', 'ui-monospace, monospace'),
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  background: it.resolvedBuild ? v('ok-bg', '#e7efe4') : v('chip-bg', '#f0f0f0'),
-                  color: it.resolvedBuild ? v('ok', '#2f6d3a') : v('fg', '#1a1a1a'),
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {it.resolvedBuild ? `${it.resolutionKind === 'clarified' ? 'Clarified' : 'Fixed'} ${it.resolvedBuild}` : STATUS_LABEL[it.status]}
-              </span>
-            </div>
-          ))
-        ) : (
-          <span style={{ fontSize: 13, opacity: 0.6 }}>Nothing raised yet.</span>
-        )}
-      </Zone>
+            ))
+          ) : (
+            <span style={{ fontSize: 13, opacity: 0.6 }}>Nothing raised yet.</span>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }

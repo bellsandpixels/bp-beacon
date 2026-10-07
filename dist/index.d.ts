@@ -5,7 +5,7 @@ export { ATTACHMENT_ACCEPT, ATTACHMENT_IMAGE_TYPES, MAX_ATTACHMENT_BYTES, MAX_AT
 export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js';
 export type { CheckSeverity, WalkCheck, WalkCheckHelp, WalkSurface, WalkArea, ValidationCatalogue, WalkState, WalkSummary, WalkIssue, WalkIdentity, WalkAvailability, WalkAssignmentSummary, WalkInProgress, WalkAdapter, WalkStartOptions, } from './walkTypes.js';
 export { WalkPane, type WalkPaneProps } from './WalkPane.js';
-export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js';
+export { WalkSurfacePane, type WalkSurfacePaneProps, type WalkLinks } from './WalkSurfacePane.js';
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js';
 export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js';
 export { createWalkAdapter, type WalkAdapterConfig } from './walkClient.js';
