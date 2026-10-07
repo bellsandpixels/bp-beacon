@@ -39,6 +39,7 @@ export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js'
 export type {
   CheckSeverity,
   WalkCheck,
+  WalkCheckHelp,
   WalkSurface,
   WalkArea,
   ValidationCatalogue,

@@ -6,7 +6,7 @@
 // the assume-pass rules (kept in step with the bp-qa record format).
 
 import { useEffect, useMemo, useState } from 'react'
-import type { ValidationCatalogue, WalkAdapter, WalkStartOptions, WalkState } from './walkTypes.js'
+import type { ValidationCatalogue, WalkAdapter, WalkCheckHelp, WalkStartOptions, WalkState } from './walkTypes.js'
 import { surfacesOf, deriveVerdict } from './walkVerdict.js'
 
 export interface WalkSurfacePaneProps {
@@ -22,6 +22,55 @@ export interface WalkSurfacePaneProps {
 }
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
+
+/**
+ * A check's authored guidance (how, why, pass, fail), collapsed behind one line under the check. A walker
+ * who built the surface never opens it; a walker who did not gets the steps and the stake without having to
+ * ask, which is what keeps them from waving checks through. Mirrors the portal checklist's CheckHelp. Renders
+ * nothing when the check has no help authored.
+ */
+function CheckHelp({ n, help }: { n: number; help?: WalkCheckHelp }) {
+  if (!help) return null
+  const how = help.how || []
+  if (!how.length && !help.why && !help.success && !help.failure) return null
+  const k = { margin: '8px 0 2px', fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', opacity: 0.7 }
+  const t = { margin: 0, fontSize: 13, lineHeight: 1.45 }
+  return (
+    <details data-testid={`walk-check-help-${n}`} style={{ marginTop: 4 }}>
+      <summary style={{ cursor: 'pointer', fontSize: 12, color: v('accent', '#9B251B'), fontWeight: 600 }}>How to check this</summary>
+      <div style={{ marginTop: 4, padding: '4px 10px 8px', borderLeft: `2px solid ${v('border', '#e4ddcd')}` }}>
+        {how.length ? (
+          <>
+            <p style={k}>How</p>
+            <ol style={{ ...t, paddingLeft: 18 }}>
+              {how.map((step, i) => (
+                <li key={i} style={{ marginBottom: 2 }}>{step}</li>
+              ))}
+            </ol>
+          </>
+        ) : null}
+        {help.why ? (
+          <>
+            <p style={k}>Why it matters</p>
+            <p style={t}>{help.why}</p>
+          </>
+        ) : null}
+        {help.success ? (
+          <>
+            <p style={k}>Pass</p>
+            <p style={t}>{help.success}</p>
+          </>
+        ) : null}
+        {help.failure ? (
+          <>
+            <p style={k}>Fail</p>
+            <p style={t}>{help.failure}</p>
+          </>
+        ) : null}
+      </div>
+    </details>
+  )
+}
 
 export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone }: WalkSurfacePaneProps) {
   const [state, setState] = useState<WalkState>({ walked: {}, defects: {} })
@@ -187,6 +236,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
                         </span>
                       ) : null}
                     </span>
+                    <CheckHelp n={c.n} help={c.help} />
                     {has ? (
                       <>
                         <input
