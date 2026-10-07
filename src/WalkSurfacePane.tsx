@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ValidationCatalogue, WalkAdapter, WalkCheckHelp, WalkStartOptions, WalkState } from './walkTypes.js'
 import { surfacesOf, deriveVerdict } from './walkVerdict.js'
+import { qrMatrix } from './qr.js'
 
 export interface WalkSurfacePaneProps {
   catalogue: ValidationCatalogue
@@ -19,9 +20,50 @@ export interface WalkSurfacePaneProps {
   // start. Included in the start effect's deps so re-launching against a new assignment restarts the walk.
   startOpts?: WalkStartOptions
   onDone?: (summary: { walkId: string }) => void
+  // Leave the walk part-way and go back to the hub. Progress is server-side, so leaving loses nothing; the
+  // hub's Resume picks it up. Omitted -> no "Walks" back control (the pre-2026-10-06 behavior).
+  onExit?: () => void
+  // The walk's name in the header; defaults to the catalogue id.
+  title?: string
+  // Ways out of the pane, each shown only when the host supplies it (owner asks, 2026-10-06).
+  links?: WalkLinks
+}
+
+/** Host-supplied URLs for the walk toolbar. All point at the SAME walk, so progress carries over. */
+export interface WalkLinks {
+  // Opens this walk in its own browser window (the portal's walk page), so the pane can close while testing.
+  popOut?: string
+  // The walk's record for review (the portal's Testing tab).
+  review?: string
+  // The URL a second device (a tablet) opens to continue this walk; shown as a QR code and a copyable link.
+  handoff?: string
 }
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
+
+/** A QR code for `text`, drawn as one SVG path. Encoded locally (qr.ts); the URL never goes to a QR service. */
+function WalkQr({ text, size = 168 }: { text: string; size?: number }) {
+  const path = useMemo(() => {
+    const m = qrMatrix(text, { ecc: 'M' })
+    let d = ''
+    m.forEach((row, y) => row.forEach((on, x) => (on ? (d += `M${x},${y}h1v1h-1z`) : null)))
+    return { d, n: m.length }
+  }, [text])
+  return (
+    // A fixed light background and dark modules in both themes: phone cameras read dark-on-light reliably.
+    <svg
+      role="img"
+      aria-label="QR code for this walk"
+      viewBox={`-4 -4 ${path.n + 8} ${path.n + 8}`}
+      width={size}
+      height={size}
+      shapeRendering="crispEdges"
+      style={{ background: '#fff', borderRadius: 8, display: 'block' }}
+    >
+      <path d={path.d} fill="#111" />
+    </svg>
+  )
+}
 
 function hasHelp(h?: WalkCheckHelp): h is WalkCheckHelp {
   return !!h && (!!(h.how && h.how.length) || !!h.why || !!h.success || !!h.failure)
@@ -91,7 +133,9 @@ function CheckHelp({ n, help }: { n: number; help: WalkCheckHelp }) {
   )
 }
 
-export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone }: WalkSurfacePaneProps) {
+export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone, onExit, title, links }: WalkSurfacePaneProps) {
+  const [device, setDevice] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [state, setState] = useState<WalkState>({ walked: {}, defects: {} })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -196,15 +240,104 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
   const verdictColor =
     verdict.label === 'PASS' ? v('ok', '#2f6d3a') : verdict.label === 'BLOCKED' || verdict.label === 'FAIL' ? v('error', '#a8322b') : v('muted', '#8a836f')
 
-  return (
-    <div style={{ color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit'), display: 'grid', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-        <strong style={{ fontFamily: v('serif', 'inherit') }}>Walk</strong>
-        {build ? <span style={{ fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.7 }}>{build}{env ? ` (${env})` : ''}</span> : null}
-        <span style={{ marginLeft: 'auto', fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.8 }}>
-          {verdict.walked} / {verdict.total} walked{verdict.defects ? ` · ${verdict.defects} flagged` : ''}
-        </span>
+  const mono = { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 12, opacity: 0.75 }
+  const linkBtn = { border: 'none', background: 'transparent', padding: '4px 0', color: v('accent', '#9B251B'), cursor: 'pointer', fontSize: 13, fontWeight: 600 }
+  const toolBtn = (hi = false) => ({
+    fontSize: 12,
+    padding: '5px 10px',
+    borderRadius: v('radius', '8px'),
+    border: `1px solid ${hi ? v('accent', '#9B251B') : v('border', '#d0d0d0')}`,
+    background: 'transparent',
+    color: v('fg', '#1a1a1a'),
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+  })
+  const wrap = { color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit'), display: 'grid', gap: 14 }
+
+  async function copyHandoff() {
+    if (!links?.handoff) return
+    try {
+      await navigator.clipboard.writeText(links.handoff)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Could not copy the link. Select it and copy it by hand.')
+    }
+  }
+
+  const header = (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        {onExit ? (
+          <button onClick={onExit} style={linkBtn} data-testid="walk-exit">
+            &larr; Walks
+          </button>
+        ) : null}
+        <div style={{ marginLeft: onExit ? 'auto' : 0, textAlign: onExit ? 'right' : 'left', display: 'grid' }}>
+          <strong style={{ fontFamily: v('serif', 'inherit') }}>{title || catalogue.catalogueId}</strong>
+          <span style={mono}>
+            {build ? `${build}${env ? ` (${env})` : ''} · ` : ''}
+            {verdict.walked} / {verdict.total} walked{verdict.defects ? ` · ${verdict.defects} flagged` : ''}
+          </span>
+        </div>
       </div>
+      {links && (links.popOut || links.review || links.handoff) ? (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: `1px solid ${v('border', '#e4ddcd')}`, paddingTop: 8 }}>
+          {links.popOut ? (
+            <button
+              style={toolBtn()}
+              title="Open this walk in its own window"
+              onClick={() => window.open(links.popOut, 'bp-validation-walk', 'popup=yes,width=820,height=960')}
+            >
+              ⧉ Pop out
+            </button>
+          ) : null}
+          {links.review ? (
+            <button style={toolBtn()} title="Open the walk record in the portal" onClick={() => window.open(links.review, '_blank', 'noopener')}>
+              ↗ Review in portal
+            </button>
+          ) : null}
+          {links.handoff ? (
+            <button style={toolBtn(true)} title="Continue this walk on a tablet or phone" onClick={() => setDevice(true)}>
+              ▣ Another device
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+
+  // Continue on another device: the same walk's URL as a QR code and a copyable link. The walk itself stays
+  // mounted underneath (this is a view swap, not a navigation), so Back returns with nothing lost.
+  if (device && links?.handoff) {
+    return (
+      <div style={wrap}>
+        <button onClick={() => setDevice(false)} style={{ ...linkBtn, justifySelf: 'start' }}>
+          &larr; Back to the walk
+        </button>
+        <div style={{ display: 'grid', justifyItems: 'center', gap: 10, textAlign: 'center' }}>
+          <span style={{ ...mono, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Continue on another device</span>
+          <strong style={{ fontFamily: v('serif', 'inherit'), fontSize: 18 }}>Scan to walk on your tablet</strong>
+          <WalkQr text={links.handoff} />
+          <p style={{ margin: 0, fontSize: 13, maxWidth: 340 }}>
+            Sign in on the tablet with your B&amp;P email. Your walked checks and flags carry over, because they are saved
+            on the server.
+          </p>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', maxWidth: '100%', border: `1px solid ${v('border', '#e4ddcd')}`, borderRadius: v('radius', '8px'), padding: '6px 8px' }}>
+            <span style={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{links.handoff}</span>
+            <button style={toolBtn()} onClick={copyHandoff}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          {error ? <p style={{ margin: 0, color: v('error', '#a8322b'), fontSize: 13 }}>{error}</p> : null}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={wrap}>
+      {header}
 
       {busy ? <span style={{ opacity: 0.6, fontSize: 13 }}>Loading the walk...</span> : null}
       {error ? <p style={{ margin: 0, color: v('error', '#a8322b'), fontSize: 13 }}>{error}</p> : null}

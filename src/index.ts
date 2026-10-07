@@ -54,7 +54,7 @@ export type {
   WalkStartOptions,
 } from './walkTypes.js'
 export { WalkPane, type WalkPaneProps } from './WalkPane.js'
-export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js'
+export { WalkSurfacePane, type WalkSurfacePaneProps, type WalkLinks } from './WalkSurfacePane.js'
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js'
 export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js'
 // The portal-backed WalkAdapter (T3): maps the WalkAdapter interface onto the client-portal /api/walk/*
