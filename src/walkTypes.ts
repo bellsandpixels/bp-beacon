@@ -15,10 +15,21 @@ import type { FeedbackStatus } from './types.js'
 // raise a debt defect to blocker, never lower a blocker. Absent = 'debt'.
 export type CheckSeverity = 'blocker' | 'debt'
 
+// The authored guidance for one check, the `help` block every catalogue check carries: the steps to take,
+// why the check matters, and what pass and fail look like. All optional, so a catalogue can fill it in check
+// by check; a check with none renders exactly as before.
+export interface WalkCheckHelp {
+  how?: string[]
+  why?: string
+  success?: string
+  failure?: string
+}
+
 export interface WalkCheck {
   n: number // stable check number; the identity a defect and a resolution key off
   text: string
   severity?: CheckSeverity // catalogue floor; defaults to 'debt'
+  help?: WalkCheckHelp
 }
 
 export interface WalkSurface {

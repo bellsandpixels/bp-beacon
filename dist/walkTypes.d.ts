@@ -1,9 +1,16 @@
 import type { FeedbackStatus } from './types.js';
 export type CheckSeverity = 'blocker' | 'debt';
+export interface WalkCheckHelp {
+    how?: string[];
+    why?: string;
+    success?: string;
+    failure?: string;
+}
 export interface WalkCheck {
     n: number;
     text: string;
     severity?: CheckSeverity;
+    help?: WalkCheckHelp;
 }
 export interface WalkSurface {
     key: string;
