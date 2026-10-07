@@ -23,52 +23,71 @@ export interface WalkSurfacePaneProps {
 
 const v = (name: string, fallback: string) => `var(--beacon-${name}, ${fallback})`
 
+function hasHelp(h?: WalkCheckHelp): h is WalkCheckHelp {
+  return !!h && (!!(h.how && h.how.length) || !!h.why || !!h.success || !!h.failure)
+}
+
 /**
- * A check's authored guidance (how, why, pass, fail), collapsed behind one line under the check. A walker
- * who built the surface never opens it; a walker who did not gets the steps and the stake without having to
- * ask, which is what keeps them from waving checks through. Mirrors the portal checklist's CheckHelp. Renders
- * nothing when the check has no help authored.
+ * A check's authored guidance for a mixed-skill tester, ported from Toudai's retired TesterWalk (the layout
+ * testers walked in before walks moved to the portal, toudai ffaf6bd8): a "Not sure? Show me how" toggle
+ * opens How to do this (the steps) and Why this matters, then two columns, "Looks right when" and "Flag it
+ * when". The columns stack on a narrow (phone) screen. Only the parts the catalogue authored are shown.
  */
-function CheckHelp({ n, help }: { n: number; help?: WalkCheckHelp }) {
-  if (!help) return null
-  const how = help.how || []
-  if (!how.length && !help.why && !help.success && !help.failure) return null
-  const k = { margin: '8px 0 2px', fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', opacity: 0.7 }
+function CheckHelp({ n, help }: { n: number; help: WalkCheckHelp }) {
+  const [open, setOpen] = useState(false)
+  const k = { margin: '0 0 4px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', opacity: 0.8 }
   const t = { margin: 0, fontSize: 13, lineHeight: 1.45 }
+  const box = (color: string) => ({ border: `1px solid ${color}`, borderRadius: v('radius', '8px'), padding: 8 })
+  const good = v('ok', '#2f6d3a')
+  const bad = v('error', '#a8322b')
   return (
-    <details data-testid={`walk-check-help-${n}`} style={{ marginTop: 4 }}>
-      <summary style={{ cursor: 'pointer', fontSize: 12, color: v('accent', '#9B251B'), fontWeight: 600 }}>How to check this</summary>
-      <div style={{ marginTop: 4, padding: '4px 10px 8px', borderLeft: `2px solid ${v('border', '#e4ddcd')}` }}>
-        {how.length ? (
-          <>
-            <p style={k}>How</p>
-            <ol style={{ ...t, paddingLeft: 18 }}>
-              {how.map((step, i) => (
-                <li key={i} style={{ marginBottom: 2 }}>{step}</li>
-              ))}
-            </ol>
-          </>
-        ) : null}
-        {help.why ? (
-          <>
-            <p style={k}>Why it matters</p>
-            <p style={t}>{help.why}</p>
-          </>
-        ) : null}
-        {help.success ? (
-          <>
-            <p style={k}>Pass</p>
-            <p style={t}>{help.success}</p>
-          </>
-        ) : null}
-        {help.failure ? (
-          <>
-            <p style={k}>Fail</p>
-            <p style={t}>{help.failure}</p>
-          </>
-        ) : null}
-      </div>
-    </details>
+    <div data-testid={`walk-check-help-${n}`} style={{ marginTop: 6 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        style={{ display: 'inline-flex', gap: 4, alignItems: 'center', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: v('accent', '#9B251B') }}
+      >
+        <span aria-hidden>{open ? '−' : '+'}</span>
+        {open ? 'Hide guidance' : 'Not sure? Show me how'}
+      </button>
+      {open ? (
+        <div style={{ marginTop: 6, padding: 12, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#e4ddcd')}`, background: v('sunk', '#f0ebe0') }}>
+          {help.how && help.how.length ? (
+            <div style={{ marginBottom: 12 }}>
+              <p style={k}>How to do this</p>
+              <ol style={{ ...t, paddingLeft: 18 }}>
+                {help.how.map((step, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+          {help.why ? (
+            <div style={{ marginBottom: 12 }}>
+              <p style={k}>Why this matters</p>
+              <p style={t}>{help.why}</p>
+            </div>
+          ) : null}
+          {help.success || help.failure ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+              {help.success ? (
+                <div style={box(good)}>
+                  <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: good }}>Looks right when</p>
+                  <p style={t}>{help.success}</p>
+                </div>
+              ) : null}
+              {help.failure ? (
+                <div style={box(bad)}>
+                  <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: bad }}>Flag it when</p>
+                  <p style={t}>{help.failure}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -236,7 +255,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
                         </span>
                       ) : null}
                     </span>
-                    <CheckHelp n={c.n} help={c.help} />
+                    {hasHelp(c.help) ? <CheckHelp n={c.n} help={c.help} /> : null}
                     {has ? (
                       <>
                         <input
