@@ -252,7 +252,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
   })
-  const wrap = { color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit'), display: 'grid', gap: 14 }
+  const wrap = { color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit'), display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }
 
   async function copyHandoff() {
     if (!links?.handoff) return
@@ -315,7 +315,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
         <button onClick={() => setDevice(false)} style={{ ...linkBtn, justifySelf: 'start' }}>
           &larr; Back to the walk
         </button>
-        <div style={{ display: 'grid', justifyItems: 'center', gap: 10, textAlign: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', justifyItems: 'center', gap: 10, textAlign: 'center' }}>
           <span style={{ ...mono, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Continue on another device</span>
           <strong style={{ fontFamily: v('serif', 'inherit'), fontSize: 18 }}>Scan to walk on your tablet</strong>
           <WalkQr text={links.handoff} />
@@ -323,7 +323,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
             Sign in on the tablet with your B&amp;P email. Your walked checks and flags carry over, because they are saved
             on the server.
           </p>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', maxWidth: '100%', border: `1px solid ${v('border', '#e4ddcd')}`, borderRadius: v('radius', '8px'), padding: '6px 8px' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%', boxSizing: 'border-box', border: `1px solid ${v('border', '#e4ddcd')}`, borderRadius: v('radius', '8px'), padding: '6px 8px' }}>
             <span style={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{links.handoff}</span>
             <button style={toolBtn()} onClick={copyHandoff}>
               {copied ? 'Copied' : 'Copy'}
