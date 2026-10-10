@@ -395,7 +395,9 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
         <div
           role="alert"
           data-testid="walk-start-failed"
-          style={{ display: 'grid', gap: 8, padding: 12, borderRadius: v('radius', '8px'), border: `1px solid ${v('error', '#a8322b')}`, background: v('bad-bg', '#f6e5e1') }}
+          // The card surface (which every host maps, light and dark) with the error colour on the border and the
+          // heading: a tinted fill would need a dark-mode pair the hosts do not all provide.
+          style={{ display: 'grid', gap: 8, padding: 12, borderRadius: v('radius', '8px'), border: `1px solid ${v('error', '#a8322b')}`, background: v('card', 'transparent') }}
         >
           <strong style={{ fontSize: 14, color: v('error', '#a8322b') }}>This walk did not start</strong>
           <p style={{ margin: 0, fontSize: 13 }}>{start.message}</p>
