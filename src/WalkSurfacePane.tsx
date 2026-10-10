@@ -9,6 +9,11 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ValidationCatalogue, WalkAdapter, WalkCheckHelp, WalkStartOptions, WalkState } from './walkTypes.js'
 import { surfacesOf, deriveVerdict } from './walkVerdict.js'
 import { qrMatrix } from './qr.js'
+import { isFlagged, startFailureMessage, withDefect, withDefects, withWalked, withoutDefects } from './walkState.js'
+
+// Where the walk is: starting (the adapter's start() is in flight), ready (a walk exists server-side, so marks
+// and flags are saved), or failed (no walk: nothing can be saved). Only `ready` renders the checks.
+type StartPhase = { phase: 'starting' } | { phase: 'ready' } | { phase: 'failed'; message: string }
 
 export interface WalkSurfacePaneProps {
   catalogue: ValidationCatalogue
@@ -137,72 +142,98 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
   const [device, setDevice] = useState(false)
   const [copied, setCopied] = useState(false)
   const [state, setState] = useState<WalkState>({ walked: {}, defects: {} })
-  const [busy, setBusy] = useState(false)
+  const [start, setStart] = useState<StartPhase>({ phase: 'starting' })
+  // Bumped by Try again, so the start effect runs once more against the same adapter.
+  const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const ready = start.phase === 'ready'
 
   const surfaces = useMemo(() => surfacesOf(catalogue), [catalogue])
   const verdict = useMemo(() => deriveVerdict(catalogue, state), [catalogue, state])
 
+  // The walk exists only once start() resolves. Until then the checks are not rendered at all, and a failed
+  // start is a blocking state with its reason, never a quiet line above a checklist that still takes marks and
+  // flags (2026-10-09: a refused start left "4 / 4 walked, 1 flagged" on screen while nothing was saved).
   useEffect(() => {
     let live = true
-    setBusy(true)
+    setStart({ phase: 'starting' })
+    setError(null)
+    setState({ walked: {}, defects: {} })
     adapter
       .start(startOpts)
-      .then((s) => live && setState({ walked: s.walked || {}, defects: s.defects || {} }))
-      .catch((e) => live && setError(e instanceof Error ? e.message : 'Could not start the walk.'))
-      .finally(() => live && setBusy(false))
+      .then((s) => {
+        if (!live) return
+        setState({ walked: s.walked || {}, defects: s.defects || {} })
+        setStart({ phase: 'ready' })
+      })
+      .catch((e) => live && setStart({ phase: 'failed', message: startFailureMessage(e) }))
     return () => {
       live = false
     }
-  }, [adapter, startOpts])
+  }, [adapter, startOpts, attempt])
+
+  // Every write below is optimistic: the pane shows the change, then saves it. A save that throws is ROLLED
+  // BACK, so the pane only ever shows what the server holds, and the error says it was not saved.
+  const notSaved = (e: unknown, fallback: string) =>
+    setError(`Not saved. ${e instanceof Error && e.message.trim() ? e.message : fallback}`)
 
   async function toggleWalked(surfaceKey: string) {
-    const next = !state.walked[surfaceKey]
+    if (!ready) return
+    const was = !!state.walked[surfaceKey]
+    const next = !was
     // Unwalking a surface also clears its flags, so a counted defect can never survive on a NOT-WALKED
     // surface (which would make the verdict read "must-fix ... across 0 walked surfaces").
     const surface = surfaces.find((s) => s.key === surfaceKey)
-    const clearing =
+    const clearing: Array<[number, string]> =
       !next && surface
-        ? surface.checks.map((c) => c.n).filter((n) => Object.prototype.hasOwnProperty.call(state.defects, n))
+        ? surface.checks.filter((c) => isFlagged(state, c.n)).map((c): [number, string] => [c.n, state.defects[c.n] ?? ''])
         : []
-    setState((s) => {
-      const walked = { ...s.walked }
-      if (next) walked[surfaceKey] = true
-      else delete walked[surfaceKey]
-      const defects = { ...s.defects }
-      for (const n of clearing) delete defects[n]
-      return { ...s, walked, defects }
-    })
+    setError(null)
+    setState((s) => withoutDefects(withWalked(s, surfaceKey, next), clearing.map(([n]) => n)))
+    let marked = false
+    let cleared = 0
     try {
       await adapter.markWalked(surfaceKey, next)
-      for (const n of clearing) await adapter.clearFlag(n)
+      marked = true
+      for (const [n] of clearing) {
+        await adapter.clearFlag(n)
+        cleared++
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save that.')
+      // Undo exactly what did not save: the walk mark if it failed, and every flag not yet cleared.
+      setState((s) => withDefects(marked ? s : withWalked(s, surfaceKey, was), clearing.slice(cleared)))
+      notSaved(e, 'Could not save that.')
     }
   }
 
   async function toggleFlag(surfaceKey: string, n: number) {
-    const has = Object.prototype.hasOwnProperty.call(state.defects, n)
-    if (has) {
-      setState((s) => {
-        const defects = { ...s.defects }
-        delete defects[n]
-        return { ...s, defects }
-      })
+    if (!ready) return
+    setError(null)
+    if (isFlagged(state, n)) {
+      const note = state.defects[n] ?? ''
+      setState((s) => withoutDefects(s, [n]))
       try {
         await adapter.clearFlag(n)
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not clear that.')
+        setState((s) => withDefects(s, [[n, note]]))
+        notSaved(e, 'Could not clear that.')
       }
     } else {
       // Flagging a check means you looked at the surface: auto-walk it.
-      setState((s) => ({ walked: { ...s.walked, [surfaceKey]: true }, defects: { ...s.defects, [n]: '' } }))
+      const wasWalked = !!state.walked[surfaceKey]
+      setState((s) => withDefect(withWalked(s, surfaceKey, true), n, ''))
+      let marked = false
       try {
         await adapter.markWalked(surfaceKey, true)
+        marked = true
         await adapter.flag({ checkRef: n, note: '' })
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not flag that.')
+        setState((s) => {
+          const unflagged = withoutDefects(s, [n])
+          return marked ? unflagged : withWalked(unflagged, surfaceKey, wasWalked)
+        })
+        notSaved(e, 'Could not flag that.')
       }
     }
   }
@@ -210,21 +241,24 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
   // Typing only updates local state; the note is synced to the adapter once, on blur (below). flag()
   // upserts by checkRef, so one intake item is updated, not one created per keystroke.
   function setNote(n: number, note: string) {
-    setState((s) => ({ ...s, defects: { ...s.defects, [n]: note } }))
+    setState((s) => withDefect(s, n, note))
   }
 
   // The note is the defect. Sync it when the field loses focus, and surface a failure like every other
   // write, so a lost note can never pass unnoticed into a submit (empty note = in-progress flag, still
-  // tracked). Awaited and single, so writes stay ordered and last-typed wins.
+  // tracked). Awaited and single, so writes stay ordered and last-typed wins. A failed note keeps the typed
+  // text in the field (it is the tester's words), and the error says it was not saved.
   async function syncNote(n: number, note: string) {
+    if (!ready) return
     try {
       await adapter.flag({ checkRef: n, note })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save that note.')
+      notSaved(e, `Could not save the note on check ${n}.`)
     }
   }
 
   async function submit() {
+    if (!ready) return
     setSubmitting(true)
     setError(null)
     try {
@@ -275,13 +309,19 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
         ) : null}
         <div style={{ marginLeft: onExit ? 'auto' : 0, textAlign: onExit ? 'right' : 'left', display: 'grid' }}>
           <strong style={{ fontFamily: v('serif', 'inherit') }}>{title || catalogue.catalogueId}</strong>
-          <span style={mono}>
+          <span style={mono} data-testid="walk-progress">
             {build ? `${build}${env ? ` (${env})` : ''} · ` : ''}
-            {verdict.walked} / {verdict.total} walked{verdict.defects ? ` · ${verdict.defects} flagged` : ''}
+            {/* Counts only describe a walk that exists; before that, say where the walk is. */}
+            {ready
+              ? `${verdict.walked} / ${verdict.total} walked${verdict.defects ? ` · ${verdict.defects} flagged` : ''}`
+              : start.phase === 'failed'
+                ? 'not started'
+                : 'starting'}
           </span>
         </div>
       </div>
-      {links && (links.popOut || links.review || links.handoff) ? (
+      {/* The links all open THIS walk, so they wait until there is one. */}
+      {ready && links && (links.popOut || links.review || links.handoff) ? (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: `1px solid ${v('border', '#e4ddcd')}`, paddingTop: 8 }}>
           {links.popOut ? (
             <button
@@ -309,7 +349,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
 
   // Continue on another device: the same walk's URL as a QR code and a copyable link. The walk itself stays
   // mounted underneath (this is a view swap, not a navigation), so Back returns with nothing lost.
-  if (device && links?.handoff) {
+  if (device && ready && links?.handoff) {
     return (
       <div style={wrap}>
         <button onClick={() => setDevice(false)} style={{ ...linkBtn, justifySelf: 'start' }}>
@@ -335,12 +375,61 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
     )
   }
 
+  if (start.phase === 'starting') {
+    return (
+      <div style={wrap}>
+        {header}
+        <span role="status" data-testid="walk-starting" style={{ opacity: 0.6, fontSize: 13 }}>
+          Starting the walk...
+        </span>
+      </div>
+    )
+  }
+
+  // No walk: say so, give the reason, and offer only what can work (try again, or go back). The checks are not
+  // shown, because a mark or a flag here would have nowhere to be saved.
+  if (start.phase === 'failed') {
+    return (
+      <div style={wrap}>
+        {header}
+        <div
+          role="alert"
+          data-testid="walk-start-failed"
+          style={{ display: 'grid', gap: 8, padding: 12, borderRadius: v('radius', '8px'), border: `1px solid ${v('error', '#a8322b')}`, background: v('bad-bg', '#f6e5e1') }}
+        >
+          <strong style={{ fontSize: 14, color: v('error', '#a8322b') }}>This walk did not start</strong>
+          <p style={{ margin: 0, fontSize: 13 }}>{start.message}</p>
+          <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>
+            Nothing you mark or flag here would be saved, so the checks stay hidden until the walk starts.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+            <button
+              onClick={() => setAttempt((a) => a + 1)}
+              data-testid="walk-start-retry"
+              style={{ padding: '6px 14px', borderRadius: v('radius', '8px'), border: 'none', background: v('accent', '#9B251B'), color: v('accent-fg', '#fff'), cursor: 'pointer', fontSize: 13 }}
+            >
+              Try again
+            </button>
+            {onExit ? (
+              <button onClick={onExit} style={toolBtn()}>
+                Back to walks
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={wrap}>
       {header}
 
-      {busy ? <span style={{ opacity: 0.6, fontSize: 13 }}>Loading the walk...</span> : null}
-      {error ? <p style={{ margin: 0, color: v('error', '#a8322b'), fontSize: 13 }}>{error}</p> : null}
+      {error ? (
+        <p role="alert" style={{ margin: 0, color: v('error', '#a8322b'), fontSize: 13 }}>
+          {error}
+        </p>
+      ) : null}
 
       {surfaces.map((s) => {
         const on = !!state.walked[s.key]
@@ -373,7 +462,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
               </div>
             ) : null}
             {s.checks.map((c) => {
-              const has = Object.prototype.hasOwnProperty.call(state.defects, c.n)
+              const has = isFlagged(state, c.n)
               const note = state.defects[c.n] ?? ''
               const noted = has && note.trim().length > 0
               return (

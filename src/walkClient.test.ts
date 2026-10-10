@@ -75,6 +75,68 @@ test('an action before start() throws (no walkId)', async () => {
   const { impl } = mockFetch({})
   const a = createWalkAdapter({ ...base, fetchImpl: impl })
   await assert.rejects(() => a.markWalked('signin', true), /start\(\) must be called/)
+  await assert.rejects(() => a.markWalked('signin', true), /has not started, so this was not saved/)
+})
+
+// --- A start that fails must fail LOUDLY (found 2026-10-09) -------------------------------------------
+// test.user.00 pressed the Studio's Walk this build; /start answered 400 cohort_ambiguous, the pane kept a
+// local walk, and every mark and flag then threw, so the flags never reached the portal. The adapter's half:
+// a failed or empty start rejects with the server's reason and leaves NO walk for later actions to write to.
+
+// A fetch that answers each path with a given status + body, recording the calls.
+function statusFetch(routes: Record<string, { status: number; body: unknown }>) {
+  const calls: Call[] = []
+  const impl = (async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined
+    calls.push({ url: String(url), method, body })
+    const r = routes[`${method} ${new URL(url, 'http://x').pathname}`] ?? { status: 200, body: {} }
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.body } as unknown as Response
+  }) as unknown as typeof fetch
+  return { impl, calls }
+}
+
+test('a start the portal refuses rejects with its reason, and no later action reaches the portal', async () => {
+  const reason = 'You are in more than one test group and this walk could not tell which one it is for.'
+  const { impl, calls } = statusFetch({
+    'POST /api/walk/start': { status: 400, body: { error: reason, code: 'cohort_ambiguous' } },
+  })
+  const a = createWalkAdapter({ ...base, cohortId: '', fetchImpl: impl })
+  await assert.rejects(() => a.start(), (e: Error) => e.message === reason)
+  await assert.rejects(() => a.markWalked('signin', true), /has not started/)
+  await assert.rejects(() => a.flag({ checkRef: 2, note: 'broken' }), /has not started/)
+  assert.deepEqual(
+    calls.map((c) => c.url),
+    ['/api/walk/start'],
+    'the mark and the flag never left the device as a request with no walk',
+  )
+})
+
+test('a 200 start with no walkId is refused, not treated as a walk', async () => {
+  const { impl } = statusFetch({ 'POST /api/walk/start': { status: 200, body: { walked: {}, defects: {} } } })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  await assert.rejects(() => a.start(), /did not start/)
+  await assert.rejects(() => a.markWalked('signin', true), /has not started/)
+})
+
+test('a failed re-start forgets the earlier walk, so actions cannot land in it', async () => {
+  let fail = false
+  const calls: Call[] = []
+  const impl = (async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined
+    calls.push({ url: String(url), method, body })
+    if (String(url).endsWith('/start') && fail) {
+      return { ok: false, status: 503, json: async () => ({ error: 'Service unavailable' }) } as unknown as Response
+    }
+    return { ok: true, status: 200, json: async () => ({ walkId: 'w-old' }) } as unknown as Response
+  }) as unknown as typeof fetch
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  await a.start()
+  fail = true
+  await assert.rejects(() => a.start({ assignmentId: 'a-new', catalogueId: 'trial-access' }), /Service unavailable/)
+  await assert.rejects(() => a.markWalked('signin', true), /has not started/)
+  assert.equal(calls.filter((c) => c.url.endsWith('/mark')).length, 0)
 })
 
 test('identity() probes the ORIGIN-ABSOLUTE identity endpoint, not <base>/api/me', async () => {
