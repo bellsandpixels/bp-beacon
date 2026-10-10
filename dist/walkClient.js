@@ -65,7 +65,7 @@ export function createWalkAdapter(cfg) {
     }
     function requireWalk() {
         if (!walkId)
-            throw new Error('start() must be called before this walk action');
+            throw new Error('This walk has not started, so this was not saved (start() must be called before this walk action)');
         return walkId;
     }
     async function identity() {
@@ -115,6 +115,9 @@ export function createWalkAdapter(cfg) {
             // walk: the assignment's catalogue/build/env/total override the adapter default, and assignmentId is
             // sent so the backend binds bp_WalkAssignmentId (B1) - the link that closes the loop. assignmentId is
             // included ONLY when present, so a plain current-build start is byte-for-byte the previous request.
+            // A new start forgets the previous walk first, so a start that fails can never leave later actions
+            // writing into whichever walk an earlier start opened.
+            walkId = undefined;
             const r = await postJson('/start', {
                 cohortId: cfg.cohortId,
                 catalogueId: opts?.catalogueId ?? cfg.catalogueId,
@@ -126,6 +129,10 @@ export function createWalkAdapter(cfg) {
                 // host set it, so a caller that does not pass platform sends a byte-for-byte previous request.
                 ...(cfg.platform ? { platform: cfg.platform } : {}),
             });
+            // A response with no walkId is not a started walk. Refuse it here, so the pane shows the failure rather
+            // than a walk whose every mark and flag would throw (and be lost) later.
+            if (!r.walkId)
+                throw new Error('The walk did not start: the portal returned no walk.');
             walkId = r.walkId;
             return { walked: r.walked ?? {}, defects: r.defects ?? {} };
         },
