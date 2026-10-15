@@ -1,6 +1,6 @@
 ---
 title: Beacon attachments + reporter identity (design)
-status: RATIFIED 2026-09-04 (owner). Build not yet started.
+status: RATIFIED 2026-09-04 (owner). BUILT and shipped (bp-beacon PRs 10 to 15, client-portal item cp-beacon-attachments, fudemoji item fdm-web-beacon-attachments-ship); see Build status below.
 discipline: product-dev
 track: bp-beacon (SDK) + client-portal (governing contract, decision #63)
 authored: 2026-09-04
@@ -11,15 +11,30 @@ amends-on-ratification: client-portal docs/beacon-anon-ingest-spec.md
 
 # Beacon: attachments + reporter identity
 
-Design proposal for two additions to the Beacon issue/idea pipeline:
+Ratified design for two additions to the Beacon issue/idea pipeline:
 
 1. **Attachments.** Let a reporter add a screenshot or a short video clip to an issue.
 2. **Reporter identity.** When the host app already knows who the user is, carry that
    through, and let the reporter add or clear a contact themselves.
 
-This document is a proposal. It builds nothing. On ratification the contract parts land in
-client-portal and the SDK parts land in bp-beacon (see "Landing homes"). Read the decisions
-block first: everything after it is the reasoning behind those asks.
+This document began as a proposal and the design is now built. It stays the only home of the
+ratified R1 to R6 record (the decisions block below), so the rulings text is kept exactly as
+ratified. The contract parts landed in client-portal and the SDK parts in bp-beacon (see
+"Landing homes"). Read the decisions block first: everything after it is the reasoning behind
+those asks.
+
+**Build status (updated 2026-10-15): built and shipped.**
+
+- **bp-beacon (SDK and pane):** #10 reporter identity via `contact` (Phase 1); #11 `attachments[]`
+  on the envelope; #12 the FeedbackPane attachment picker; #13 drag-drop and clipboard paste;
+  #14 the Firefox/Safari paste fix; #15 two-phase attachments in the KMP client (Phase 4 parity).
+- **client-portal (contract and server), item `cp-beacon-attachments`:**
+  `api/src/lib/beacon-attachments.ts` (the `attachments[]` contract and reconcile core), the
+  rate-limited upload ticket endpoint (`beacon-attachment-ticket`, same per-IP window as
+  `/api/beacon-signal`), and the malware-scan resolver timer (`beacon-attachment-scan-timer`).
+  Slices landed in client-portal #649, #650, #656, #661, #662, #672 and #674; the
+  serve-only-on-clean scan gate was deferred to pre-GA in client-portal #669.
+- **fudemoji:** `fdm-web-beacon-attachments-ship` is done (the web picker shipped, proven live).
 
 ---
 
