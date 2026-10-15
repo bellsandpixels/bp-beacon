@@ -13,6 +13,7 @@
 //   <FeedbackPane adapter={adapter} gatherContext={() => gatherWebContext({ appName, appVersion, env })} />
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA } from './diagnostics.js';
 export { createBeaconAdapter, buildEnvelope } from './adapter.js';
+export { ATTACHMENT_ACCEPT, ATTACHMENT_IMAGE_TYPES, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, validateAttachmentFile, } from './attachments.js';
 export { FeedbackPane } from './FeedbackPane.js';
 export { WalkPane } from './WalkPane.js';
 export { WalkSurfacePane } from './WalkSurfacePane.js';
@@ -21,3 +22,18 @@ export { createStubWalkAdapter } from './walkAdapter.js';
 // The portal-backed WalkAdapter (T3): maps the WalkAdapter interface onto the client-portal /api/walk/*
 // endpoints. The one client implementation a portal-backed product wires (the stub above is for demos).
 export { createWalkAdapter } from './walkClient.js';
+export { createLocalOnboardingStore, emptyOnboardingState, parseOnboardingState, onboardingStorageKey, isChecklistDone, shouldAutoOpenOnboarding, shouldAutoStartTour, DEFAULT_RESURFACE_MS, } from './onboardingStore.js';
+export { whatsNewSinceLastVisit, whatsNewSinceLastVisitByDate, newestEntryDate, compareVersions, parseVersion, } from './whatsNew.js';
+export { OnboardingPane } from './OnboardingPane.js';
+// The one first-run wiring every product mounts: config in, AppFrame props + the tour out. The auto-open
+// rule (What's new wins over the welcome) lives in onboardingDecide, once.
+export { useBeaconOnboarding, } from './useBeaconOnboarding.js';
+export { decideAutoOpen, newestParseableVersion, pickAutoStartTour } from './onboardingDecide.js';
+// The one Beacon mount (decision #167): AppFrame + parseChangelog injected, so @bp/beacon stays UI-agnostic.
+export { BeaconFrame } from './BeaconFrame.js';
+export { userKeyOf } from './userKey.js';
+// First-time moment explainers (the first save, the first publish): declared on BeaconFrame (moments), announced
+// from anywhere with announceMoment(id), shown once per user and recorded in the same OnboardingState.
+export { announceMoment, shouldShowMoment, momentOutcome, withMomentOutcome, momentParagraphs, findMoment, MOMENT_EVENT, } from './moments.js';
+export { MomentPane } from './MomentPane.js';
+export { useBeaconMoments } from './useBeaconMoments.js';

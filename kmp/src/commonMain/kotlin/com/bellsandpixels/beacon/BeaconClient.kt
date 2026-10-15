@@ -6,7 +6,9 @@ import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -29,6 +31,26 @@ private data class BeaconResponse(
 @Serializable
 private data class BeaconError(val message: String? = null, val code: String? = null)
 
+// The two-phase attachment ticket wire shapes (cp-beacon-attachments). Phase 1: POST the ticket
+// endpoint with the clientReportId + the declared type/size of each file; it mints one write-only SAS
+// per file. Phase 2 (below): PUT each image straight to its `url`. Mirrors the web adapter.ts flow and
+// the portal's /api/beacon-attachment-ticket contract.
+@Serializable
+private data class TicketRequestFile(val contentType: String, val bytes: Long)
+
+@Serializable
+private data class TicketRequest(
+    val clientReportId: String,
+    val hp: String = "",
+    val files: List<TicketRequestFile>,
+)
+
+@Serializable
+private data class Ticket(val attachmentId: String? = null, val url: String? = null)
+
+@Serializable
+private data class TicketResponse(val tickets: List<Ticket> = emptyList())
+
 // The Beacon feedback client. Assembles the consented envelope and POSTs it to the client-portal
 // anonymous intake endpoint. Native apps call this endpoint DIRECTLY (no browser => no CORS), sending
 // the same envelope the web Beacon sends through its forwarder.
@@ -42,10 +64,17 @@ private data class BeaconError(val message: String? = null, val code: String? = 
 class BeaconClient(
     private val product: String,
     private val endpoint: String = DEFAULT_ENDPOINT,
+    // Where the attachment upload TICKETS are minted (cp-beacon-attachments): the portal's
+    // /api/beacon-attachment-ticket (native posts it DIRECTLY - no browser, no CORS, no forwarder). Set
+    // it to enable image attachments; when null, canUploadAttachments is false and the FeedbackPane hides
+    // the image picker (graceful no-op, mirroring the web ticketEndpoint contract).
+    private val ticketEndpoint: String? = null,
     // Injectable so tests can supply a fixed context without touching android.os.Build / UIDevice.
     private val platformContext: () -> PlatformContext = ::capturePlatformContext,
     engine: HttpClientEngine? = null,
 ) {
+    // The FeedbackPane offers the image picker ONLY when a ticket endpoint is configured.
+    val canUploadAttachments: Boolean get() = ticketEndpoint != null
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
@@ -84,6 +113,9 @@ class BeaconClient(
         consent: Boolean,
         appMeta: BeaconAppMeta,
         clientReportId: String = Uuid.random().toString(),
+        // Refs to images already uploaded via uploadAttachments (cp-beacon-attachments). Pass the SAME
+        // clientReportId that uploadAttachments returned so the envelope and the blobs share one id.
+        attachments: List<BeaconAttachmentRef>? = null,
     ): BeaconResult {
         // Consent gate [D3]: attach the allow-list context ONLY on explicit consent.
         val context = if (consent) {
@@ -111,6 +143,9 @@ class BeaconClient(
             consent = consent,
             clientReportId = clientReportId,
             context = context,
+            // Ride only when non-empty (explicitNulls = false drops it otherwise); the server re-verifies
+            // each blob (existence, size, sniffed type) against this clientReportId's quarantine prefix.
+            attachments = attachments?.takeIf { it.isNotEmpty() },
         )
 
         return try {
@@ -135,6 +170,80 @@ class BeaconClient(
         }
     }
 
+    // Two-phase attachment upload (cp-beacon-attachments), the native mirror of the web adapter.ts flow.
+    // Mint a shared clientReportId, request one write-only SAS per image from the ticket endpoint, then PUT
+    // each image straight to blob. Returns the shared id + the refs that uploaded, which the caller passes
+    // to submit(clientReportId = ..., attachments = ...) so the envelope and the blobs share one id.
+    //
+    // Best-effort per file: a failed PUT (or a ticket the server declined) is skipped, never thrown, so a
+    // report can still be filed without that image. Returns an empty ref list (with the id) when there is
+    // no ticket endpoint, no images pass validation, or the mint call fails. Native does NOT do a CORS
+    // preflight, so unlike the web path this needs no storage CORS origin - only the SAS + network.
+    @OptIn(ExperimentalUuidApi::class)
+    suspend fun uploadAttachments(
+        images: List<BeaconAttachment>,
+        clientReportId: String = Uuid.random().toString(),
+    ): BeaconUploadResult {
+        val ticketEndpoint = this.ticketEndpoint
+        // Drop anything past the cap or failing the image allow-list / size gate up front (the server
+        // re-verifies regardless); if nothing survives there is nothing to mint.
+        val valid = images.asSequence()
+            .filter { BeaconAttachments.validate(it) == null }
+            .take(BeaconAttachments.MAX_ATTACHMENTS)
+            .toList()
+        if (ticketEndpoint == null || valid.isEmpty()) return BeaconUploadResult(clientReportId, emptyList())
+
+        // Phase 1: mint one write-only SAS per file. Tickets come back in files order (the server iterates
+        // the request's files array in order), so index i pairs ticket i with file i.
+        val tickets: List<Ticket> = try {
+            val res: HttpResponse = http.post(ticketEndpoint) {
+                contentType(ContentType.Application.Json)
+                setBody(
+                    TicketRequest(
+                        clientReportId = clientReportId,
+                        hp = "",
+                        files = valid.map { TicketRequestFile(it.contentType, it.bytes.size.toLong()) },
+                    ),
+                )
+            }
+            if (res.status.isSuccess()) {
+                val text = res.bodyAsText()
+                runCatching { json.decodeFromString(TicketResponse.serializer(), text) }.getOrNull()?.tickets.orEmpty()
+            } else {
+                emptyList()
+            }
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return BeaconUploadResult(clientReportId, emptyList())
+        }
+
+        // Phase 2: PUT each image straight to its SAS url. Skip any ticket missing its url/id or a PUT that
+        // does not succeed.
+        val refs = ArrayList<BeaconAttachmentRef>(valid.size)
+        for (i in valid.indices) {
+            val ticket = tickets.getOrNull(i) ?: continue
+            val url = ticket.url ?: continue
+            val id = ticket.attachmentId ?: continue
+            val img = valid[i]
+            try {
+                val put: HttpResponse = http.put(url) {
+                    header("x-ms-blob-type", "BlockBlob")
+                    contentType(ContentType.parse(img.contentType))
+                    setBody(img.bytes)
+                }
+                if (put.status.isSuccess()) {
+                    refs.add(BeaconAttachmentRef(id = id, contentType = img.contentType, bytes = img.bytes.size.toLong()))
+                }
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // skip a failed upload; the report can still be filed
+            }
+        }
+        return BeaconUploadResult(clientReportId, refs)
+    }
+
     fun close() {
         http.close()
     }
@@ -145,11 +254,23 @@ class BeaconClient(
         // non-prod tier that actually exists.
         const val DEFAULT_ENDPOINT = "https://clientportal.bells-and-pixels.com/api/beacon-signal"
 
+        // Prod portal attachment-ticket endpoint (cp-beacon-attachments). Native posts it directly (no
+        // forwarder, no CORS). Pair it with DEFAULT_ENDPOINT unless a non-prod tier actually exists.
+        const val DEFAULT_TICKET_ENDPOINT = "https://clientportal.bells-and-pixels.com/api/beacon-attachment-ticket"
+
         /**
          * Swift-friendly factory. Kotlin default constructor params are not exposed to Swift/ObjC, so the
          * SwiftUI Beacon builds the client through this instead of the multi-arg init (whose
          * `platformContext` closure is awkward from Swift). Pass the app's intake product tag.
          */
         fun createDefault(product: String): BeaconClient = BeaconClient(product = product)
+
+        /**
+         * Swift-friendly factory that ALSO enables image attachments by wiring the ticket endpoint
+         * (cp-beacon-attachments). Use this when the pane should offer the picker; pass
+         * DEFAULT_TICKET_ENDPOINT for prod.
+         */
+        fun createDefault(product: String, ticketEndpoint: String): BeaconClient =
+            BeaconClient(product = product, ticketEndpoint = ticketEndpoint)
     }
 }

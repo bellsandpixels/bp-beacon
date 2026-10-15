@@ -19,9 +19,17 @@ export type {
   FeedbackAdapter,
   BeaconContext,
   BeaconEnvelope,
+  BeaconAttachmentRef,
 } from './types.js'
 export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA, type WebContextConfig } from './diagnostics.js'
 export { createBeaconAdapter, buildEnvelope, type BeaconAdapterConfig } from './adapter.js'
+export {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_IMAGE_TYPES,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS,
+  validateAttachmentFile,
+} from './attachments.js'
 export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js'
 
 // The validation walk (T1): the walk analog of feedback. The Validation-hub pane + the WalkAdapter
@@ -31,6 +39,7 @@ export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js'
 export type {
   CheckSeverity,
   WalkCheck,
+  WalkCheckHelp,
   WalkSurface,
   WalkArea,
   ValidationCatalogue,
@@ -45,9 +54,76 @@ export type {
   WalkStartOptions,
 } from './walkTypes.js'
 export { WalkPane, type WalkPaneProps } from './WalkPane.js'
-export { WalkSurfacePane, type WalkSurfacePaneProps } from './WalkSurfacePane.js'
+export { WalkSurfacePane, type WalkSurfacePaneProps, type WalkLinks } from './WalkSurfacePane.js'
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js'
 export { createStubWalkAdapter, type StubWalkOptions } from './walkAdapter.js'
 // The portal-backed WalkAdapter (T3): maps the WalkAdapter interface onto the client-portal /api/walk/*
 // endpoints. The one client implementation a portal-backed product wires (the stub above is for demos).
 export { createWalkAdapter, type WalkAdapterConfig } from './walkClient.js'
+
+// First-run / onboarding: a welcome + checklist pane, a coach-mark tour, and "what's new since your last
+// visit", on one OnboardingAdapter (default: createLocalOnboardingStore). Skip ("not now"), "Don't show me
+// this again" and the last-seen version persist per product + user. CoachTour is also published on the
+// "@bp/beacon/tour" subpath so a product can lazy-load it.
+export type {
+  OnboardingStep,
+  OnboardingState,
+  OnboardingAdapter,
+  OnboardingPolicy,
+  TourOutcome,
+  TourStep,
+  Moment,
+  MomentOutcome,
+  BeaconTour,
+} from './onboardingTypes.js'
+export {
+  createLocalOnboardingStore,
+  emptyOnboardingState,
+  parseOnboardingState,
+  onboardingStorageKey,
+  isChecklistDone,
+  shouldAutoOpenOnboarding,
+  shouldAutoStartTour,
+  DEFAULT_RESURFACE_MS,
+  type LocalOnboardingStoreConfig,
+  type OnboardingStorage,
+} from './onboardingStore.js'
+export {
+  whatsNewSinceLastVisit,
+  whatsNewSinceLastVisitByDate,
+  newestEntryDate,
+  compareVersions,
+  parseVersion,
+  type VersionedEntry,
+  type WhatsNewResult,
+} from './whatsNew.js'
+export { OnboardingPane, type OnboardingPaneProps } from './OnboardingPane.js'
+// CoachTour itself lives on the "@bp/beacon/tour" subpath ONLY (the hook below loads it lazily), so a plain
+// import of @bp/beacon never pulls the tour code. Its types stay here.
+export type { CoachTourProps } from './CoachTour.js'
+export type { CardPlacement, Rect, Size } from './tourPlacement.js'
+// The one first-run wiring every product mounts: config in, AppFrame props + the tour out. The auto-open
+// rule (What's new wins over the welcome) lives in onboardingDecide, once.
+export {
+  useBeaconOnboarding,
+  type BeaconOnboardingConfig,
+  type BeaconOnboarding,
+  type BeaconOnboardingFrameProps,
+} from './useBeaconOnboarding.js'
+export { decideAutoOpen, newestParseableVersion, pickAutoStartTour, type AutoOpenPanel } from './onboardingDecide.js'
+// The one Beacon mount (decision #167): AppFrame + parseChangelog injected, so @bp/beacon stays UI-agnostic.
+export { BeaconFrame, type BeaconFrameProps } from './BeaconFrame.js'
+export { userKeyOf } from './userKey.js'
+// First-time moment explainers (the first save, the first publish): declared on BeaconFrame (moments), announced
+// from anywhere with announceMoment(id), shown once per user and recorded in the same OnboardingState.
+export {
+  announceMoment,
+  shouldShowMoment,
+  momentOutcome,
+  withMomentOutcome,
+  momentParagraphs,
+  findMoment,
+  MOMENT_EVENT,
+} from './moments.js'
+export { MomentPane, type MomentPaneProps } from './MomentPane.js'
+export { useBeaconMoments, type BeaconMomentsConfig, type BeaconMoments } from './useBeaconMoments.js'

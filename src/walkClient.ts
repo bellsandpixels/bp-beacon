@@ -29,6 +29,11 @@ export interface WalkAdapterConfig {
   // The build the walk runs on (the version-pill string) and the ring; stamped on the walk + its flags.
   build?: string
   env?: string
+  // The device platform this walk runs on (web | android | ios), stamped on the walk so its flags dedup per
+  // platform (decision #155 slice 3: iOS and Android walks of the same check are SEPARATE defects). A web pane
+  // passes 'web'; a native SDK passes its own. Omitted -> the portal defaults it (web), byte-for-byte the
+  // previous request for callers that do not set it.
+  platform?: string
   // The catalogue's surface count (M), sent at start/submit so coverage N/M is honest server-side.
   total?: number
   // Reuse the host's sign-in (e.g. the portal magic-link). Omitted -> authenticate() just resolves identity.
@@ -61,6 +66,8 @@ interface IssueResponse {
   title?: string
   status?: WalkIssue['status']
   resolvedBuild?: string
+  resolution?: string
+  resolutionKind?: 'fixed' | 'clarified'
   build?: string
 }
 interface CurrentResponse {
@@ -112,6 +119,8 @@ function mapIssue(r: IssueResponse): WalkIssue {
     title: r.title ?? '',
     status: r.status ?? 'submitted',
     resolvedBuild: r.resolvedBuild,
+    resolution: r.resolution,
+    resolutionKind: r.resolutionKind,
     build: r.build ?? '',
   }
 }
@@ -140,7 +149,7 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
     return data
   }
   function requireWalk(): string {
-    if (!walkId) throw new Error('start() must be called before this walk action')
+    if (!walkId) throw new Error('This walk has not started, so this was not saved (start() must be called before this walk action)')
     return walkId
   }
 
@@ -187,6 +196,9 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
       // walk: the assignment's catalogue/build/env/total override the adapter default, and assignmentId is
       // sent so the backend binds bp_WalkAssignmentId (B1) - the link that closes the loop. assignmentId is
       // included ONLY when present, so a plain current-build start is byte-for-byte the previous request.
+      // A new start forgets the previous walk first, so a start that fails can never leave later actions
+      // writing into whichever walk an earlier start opened.
+      walkId = undefined
       const r = await postJson<StartResponse>('/start', {
         cohortId: cfg.cohortId,
         catalogueId: opts?.catalogueId ?? cfg.catalogueId,
@@ -194,7 +206,13 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
         env: opts?.env ?? cfg.env,
         total: opts?.total ?? cfg.total,
         ...(opts?.assignmentId ? { assignmentId: opts.assignmentId } : {}),
+        // #155 slice 3: the walk's device platform, so its flags dedup per platform. Included ONLY when the
+        // host set it, so a caller that does not pass platform sends a byte-for-byte previous request.
+        ...(cfg.platform ? { platform: cfg.platform } : {}),
       })
+      // A response with no walkId is not a started walk. Refuse it here, so the pane shows the failure rather
+      // than a walk whose every mark and flag would throw (and be lost) later.
+      if (!r.walkId) throw new Error('The walk did not start: the portal returned no walk.')
       walkId = r.walkId
       return { walked: r.walked ?? {}, defects: r.defects ?? {} }
     },
