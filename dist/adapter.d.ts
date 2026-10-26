@@ -16,4 +16,5 @@ export declare function buildEnvelope(cfg: BeaconAdapterConfig, input: {
     attachments?: BeaconAttachmentRef[];
     clientReportId?: string;
 }): BeaconEnvelope;
+export declare function errorMessageOf(data: unknown): string;
 export declare function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter;

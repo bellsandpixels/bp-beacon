@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildEnvelope, type BeaconAdapterConfig } from './adapter.js'
+import { buildEnvelope, createBeaconAdapter, errorMessageOf, type BeaconAdapterConfig } from './adapter.js'
 import { deviceFromUA, osFromUA, osMajorFromUA } from './diagnostics.js'
 
 const cfg: BeaconAdapterConfig = {
@@ -155,4 +155,21 @@ test('osMajor stays the version detail behind the coarse os (unchanged behaviour
   assert.equal(osMajorFromUA(UA.iPhone), 'iOS 18')
   assert.equal(osMajorFromUA(UA.androidPhone), 'Android 15')
   assert.equal(osMajorFromUA(UA.winDesktop), 'Windows 10+')
+})
+
+test('a failed submit surfaces readable text for both error shapes, never "[object Object]"', async () => {
+  assert.equal(errorMessageOf({ error: 'Please wait a minute.' }), 'Please wait a minute.')
+  assert.equal(errorMessageOf({ error: { message: 'title is too short', code: 'invalid_title' } }), 'title is too short')
+  assert.equal(errorMessageOf({ error: { code: 'x' } }), 'Could not file the report.')
+  assert.equal(errorMessageOf(null), 'Could not file the report.')
+  const portalShaped = createBeaconAdapter({
+    endpoint: 'https://portal.example/api/beacon-signal',
+    product: 'toudai',
+    appName: 'T',
+    appVersion: '1',
+    env: 'dev',
+    fetchImpl: (async () =>
+      new Response(JSON.stringify({ error: { message: 'Unknown product', code: 'invalid_product' } }), { status: 400 })) as typeof fetch,
+  })
+  await assert.rejects(portalShaped.submit({ kind: 'bug', title: 'Broken', details: '', consent: false }), /^Error: Unknown product$/)
 })

@@ -183,11 +183,42 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
     }
   }
 
+  // Back to an empty form for the next report. A host usually keeps the pane mounted while its panel is closed,
+  // so without this the next open would still show the "thanks". The contact and consent choices are kept.
+  function sendAnother() {
+    setAttachments((cur) => {
+      for (const a of cur) URL.revokeObjectURL(a.url)
+      return []
+    })
+    setAttachError(null)
+    setTitle('')
+    setDetails('')
+    setKind('bug')
+    setShowIncluded(false)
+    setError(null)
+    setDone(null)
+  }
+
   if (done) {
     return (
       <div style={{ color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit') }}>
         <p style={{ margin: 0 }}>Thanks - your {kind === 'bug' ? 'issue' : 'idea'} was sent.</p>
         {done.reference ? <p style={{ margin: '8px 0 0', opacity: 0.7 }}>Reference: {done.reference}</p> : null}
+        <button
+          type="button"
+          onClick={sendAnother}
+          style={{
+            marginTop: 12,
+            padding: '6px 12px',
+            borderRadius: v('radius', '8px'),
+            border: `1px solid ${v('border', '#d0d0d0')}`,
+            background: 'transparent',
+            color: v('fg', '#1a1a1a'),
+            cursor: 'pointer',
+          }}
+        >
+          Send another
+        </button>
       </div>
     )
   }
