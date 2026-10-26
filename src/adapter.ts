@@ -76,6 +76,17 @@ export function buildEnvelope(
   return envelope
 }
 
+// The reporter-facing text of a failed submit. A forwarder answers { error: '<sentence>' }; the portal itself
+// answers { error: { message, code } } (client-portal core/http.ts), which a plain `new Error(data.error)` would
+// show as "[object Object]". Anything else falls back to a generic sentence.
+export function errorMessageOf(data: unknown): string {
+  const err = (data as { error?: unknown } | null | undefined)?.error
+  if (typeof err === 'string' && err.trim()) return err
+  const message = err && typeof err === 'object' ? (err as { message?: unknown }).message : undefined
+  if (typeof message === 'string' && message.trim()) return message
+  return 'Could not file the report.'
+}
+
 export function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter {
   const doFetch = cfg.fetchImpl ?? fetch
   const adapter: FeedbackAdapter = {
@@ -88,11 +99,11 @@ export function createBeaconAdapter(cfg: BeaconAdapterConfig): FeedbackAdapter {
       })
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean
-        error?: string
+        error?: unknown
         intakeNumber?: string | number
       }
       if (!res.ok || data.ok === false) {
-        throw new Error(data.error || 'Could not file the report.')
+        throw new Error(errorMessageOf(data))
       }
       const ref = data.intakeNumber != null ? String(data.intakeNumber) : undefined
       return { id: ref ?? '', reference: ref }

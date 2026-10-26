@@ -169,8 +169,32 @@ export function FeedbackPane({ adapter, gatherContext, resolveIdentity, onDone }
             setBusy(false);
         }
     }
+    // Back to an empty form for the next report. A host usually keeps the pane mounted while its panel is closed,
+    // so without this the next open would still show the "thanks". The contact and consent choices are kept.
+    function sendAnother() {
+        setAttachments((cur) => {
+            for (const a of cur)
+                URL.revokeObjectURL(a.url);
+            return [];
+        });
+        setAttachError(null);
+        setTitle('');
+        setDetails('');
+        setKind('bug');
+        setShowIncluded(false);
+        setError(null);
+        setDone(null);
+    }
     if (done) {
-        return (_jsxs("div", { style: { color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit') }, children: [_jsxs("p", { style: { margin: 0 }, children: ["Thanks - your ", kind === 'bug' ? 'issue' : 'idea', " was sent."] }), done.reference ? _jsxs("p", { style: { margin: '8px 0 0', opacity: 0.7 }, children: ["Reference: ", done.reference] }) : null] }));
+        return (_jsxs("div", { style: { color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit') }, children: [_jsxs("p", { style: { margin: 0 }, children: ["Thanks - your ", kind === 'bug' ? 'issue' : 'idea', " was sent."] }), done.reference ? _jsxs("p", { style: { margin: '8px 0 0', opacity: 0.7 }, children: ["Reference: ", done.reference] }) : null, _jsx("button", { type: "button", onClick: sendAnother, style: {
+                        marginTop: 12,
+                        padding: '6px 12px',
+                        borderRadius: v('radius', '8px'),
+                        border: `1px solid ${v('border', '#d0d0d0')}`,
+                        background: 'transparent',
+                        color: v('fg', '#1a1a1a'),
+                        cursor: 'pointer',
+                    }, children: "Send another" })] }));
     }
     const included = showIncluded && gatherContext ? gatherContext() : null;
     return (_jsxs("div", { style: { color: v('fg', '#1a1a1a'), padding: v('pad', '16px'), fontFamily: v('font', 'inherit'), display: 'grid', gap: 12 }, children: [_jsx("div", { role: "tablist", "aria-label": "Feedback kind", style: { display: 'flex', gap: 8 }, children: KINDS.map((k) => (_jsx("button", { role: "tab", "aria-selected": kind === k.value, onClick: () => setKind(k.value), style: {
