@@ -1,4 +1,4 @@
-import type { FeedbackStatus } from './types.js';
+import type { BeaconAttachmentRef, FeedbackStatus } from './types.js';
 export type CheckSeverity = 'blocker' | 'debt';
 export interface WalkCheckHelp {
     how?: string[];
@@ -91,6 +91,12 @@ export interface WalkStartOptions {
     env?: string;
     total?: number;
 }
+export interface WalkFlagInput {
+    checkRef: number;
+    note: string;
+    clientReportId?: string;
+    attachments?: BeaconAttachmentRef[];
+}
 export interface WalkAdapter {
     authenticate: () => Promise<WalkIdentity>;
     identity: () => Promise<WalkIdentity>;
@@ -98,12 +104,14 @@ export interface WalkAdapter {
     current: () => Promise<WalkInProgress | null>;
     start: (opts?: WalkStartOptions) => Promise<WalkState>;
     markWalked: (surfaceKey: string, walked: boolean) => Promise<void>;
-    flag: (input: {
-        checkRef: number;
-        note: string;
-    }) => Promise<{
+    flag: (input: WalkFlagInput) => Promise<{
         id: string;
         reference?: string;
+        attachments?: number;
+    }>;
+    uploadAttachments?: (files: File[]) => Promise<{
+        clientReportId: string;
+        attachments: BeaconAttachmentRef[];
     }>;
     clearFlag: (checkRef: number) => Promise<void>;
     submit: () => Promise<WalkSummary>;

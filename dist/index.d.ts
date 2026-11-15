@@ -3,7 +3,8 @@ export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA, type WebContex
 export { createBeaconAdapter, buildEnvelope, errorMessageOf, type BeaconAdapterConfig } from './adapter.js';
 export { ATTACHMENT_ACCEPT, ATTACHMENT_IMAGE_TYPES, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, validateAttachmentFile, } from './attachments.js';
 export { FeedbackPane, type FeedbackPaneProps } from './FeedbackPane.js';
-export type { CheckSeverity, WalkCheck, WalkCheckHelp, WalkSurface, WalkArea, ValidationCatalogue, WalkState, WalkSummary, WalkIssue, WalkIdentity, WalkAvailability, WalkAssignmentSummary, WalkInProgress, WalkAdapter, WalkStartOptions, } from './walkTypes.js';
+export type { CheckSeverity, WalkCheck, WalkCheckHelp, WalkSurface, WalkArea, ValidationCatalogue, WalkState, WalkSummary, WalkIssue, WalkIdentity, WalkAvailability, WalkAssignmentSummary, WalkInProgress, WalkAdapter, WalkStartOptions, WalkFlagInput, } from './walkTypes.js';
+export { uploadViaTickets, type UploadResult } from './attachmentUpload.js';
 export { WalkPane, type WalkPaneProps } from './WalkPane.js';
 export { WalkSurfacePane, type WalkSurfacePaneProps, type WalkLinks } from './WalkSurfacePane.js';
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js';

@@ -5,9 +5,7 @@
 // (Android/iOS) client sends directly. This is the ONE implementation the products converge onto.
 import { gatherWebContext } from './diagnostics.js';
 import { MAX_ATTACHMENTS } from './attachments.js';
-function newClientReportId() {
-    return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined;
-}
+import { newClientReportId, uploadViaTickets } from './attachmentUpload.js';
 // Build the wire envelope. Exported so a contract test can assert its shape against the server without a
 // network call.
 const MAX_CONTACT = 200;
@@ -76,46 +74,7 @@ export function createBeaconAdapter(cfg) {
     // failed upload is skipped (never throws), so the report can still be filed without that image.
     if (cfg.ticketEndpoint) {
         const ticketEndpoint = cfg.ticketEndpoint;
-        adapter.uploadAttachments = async (files) => {
-            const clientReportId = newClientReportId();
-            if (!clientReportId || !files.length)
-                return { clientReportId: clientReportId ?? '', attachments: [] };
-            const capped = files.slice(0, MAX_ATTACHMENTS);
-            let tickets = [];
-            try {
-                const res = await doFetch(ticketEndpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ clientReportId, hp: '', files: capped.map((f) => ({ contentType: f.type, bytes: f.size })) }),
-                });
-                const data = (await res.json().catch(() => ({})));
-                tickets = res.ok ? data.tickets ?? [] : [];
-            }
-            catch {
-                return { clientReportId, attachments: [] };
-            }
-            const attachments = [];
-            // Tickets come back in files order (the server iterates the request's files array in order).
-            for (let i = 0; i < tickets.length && i < capped.length; i++) {
-                const t = tickets[i];
-                const f = capped[i];
-                if (!t || !f)
-                    continue;
-                try {
-                    const put = await doFetch(t.url, {
-                        method: 'PUT',
-                        headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-Type': f.type },
-                        body: f,
-                    });
-                    if (put.ok)
-                        attachments.push({ id: t.attachmentId, contentType: f.type, bytes: f.size });
-                }
-                catch {
-                    // skip a failed upload; the report can still be filed
-                }
-            }
-            return { clientReportId, attachments };
-        };
+        adapter.uploadAttachments = (files) => uploadViaTickets(doFetch, ticketEndpoint, files);
     }
     return adapter;
 }

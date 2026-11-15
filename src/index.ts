@@ -52,7 +52,9 @@ export type {
   WalkInProgress,
   WalkAdapter,
   WalkStartOptions,
+  WalkFlagInput,
 } from './walkTypes.js'
+export { uploadViaTickets, type UploadResult } from './attachmentUpload.js'
 export { WalkPane, type WalkPaneProps } from './WalkPane.js'
 export { WalkSurfacePane, type WalkSurfacePaneProps, type WalkLinks } from './WalkSurfacePane.js'
 export { deriveVerdict, surfacesOf, checkByNumber, type Verdict, type VerdictLabel } from './walkVerdict.js'

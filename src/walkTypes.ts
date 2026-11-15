@@ -5,7 +5,7 @@
 // note. Coverage (which surfaces nobody walked) is the load-bearing signal. See the validation-motion plan
 // (T1) and bp-qa validation-checklist.md (the record FORMAT the walk renders downstream).
 
-import type { FeedbackStatus } from './types.js'
+import type { BeaconAttachmentRef, FeedbackStatus } from './types.js'
 
 // ---- The catalogue: the test script (surfaces + checks + severity floors), the shape of
 // toudai/qa/validation-checks.json. The host supplies it as a build asset so the walk always matches the
@@ -143,6 +143,14 @@ export interface WalkStartOptions {
   total?: number
 }
 
+// What a flag write carries. clientReportId + attachments ride together, only when screenshots were uploaded.
+export interface WalkFlagInput {
+  checkRef: number
+  note: string
+  clientReportId?: string
+  attachments?: BeaconAttachmentRef[]
+}
+
 // ---- The backend-agnostic walk adapter, the walk analog of FeedbackAdapter. The host wires it (a shared
 // portal implementation, or a scaffold); the walk pane calls it. authenticate / listMine / listMyIssues are
 // the authenticated (cohort tester) shape. The kit stays free of any specific backend. ----
@@ -166,7 +174,14 @@ export interface WalkAdapter {
   // Flag a check -> upserts this viewer's intake item for the check (check-ref + build/env), reusing the
   // beacon-signal path. Idempotent by checkRef within the walk: re-calling updates the note in place and
   // returns the same ref, never a duplicate item. Callers sync once (on blur / at submit), not per keystroke.
-  flag: (input: { checkRef: number; note: string }) => Promise<{ id: string; reference?: string }>
+  // With clientReportId + attachments (from uploadAttachments), the flag also carries screenshots: the
+  // server verifies each uploaded image and stores it privately against this flag's intake item, and
+  // `attachments` in the result is how many that item now holds (cp-walk-flag-screenshots).
+  flag: (input: WalkFlagInput) => Promise<{ id: string; reference?: string; attachments?: number }>
+  // OPTIONAL (cp-walk-flag-screenshots): upload images for a flag via the two-phase ticket flow, returning
+  // the clientReportId + refs to pass to flag(). Present only when the host configured a ticket endpoint;
+  // the walk pane offers "Add screenshot" (and paste) only when this is defined.
+  uploadAttachments?: (files: File[]) => Promise<{ clientReportId: string; attachments: BeaconAttachmentRef[] }>
   // Clear a flag (before it is submitted).
   clearFlag: (checkRef: number) => Promise<void>
   // Submit the completed coverage; writes the walk record and returns its summary.

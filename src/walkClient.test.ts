@@ -262,3 +262,52 @@ test('start() sends platform only when the host set it', async () => {
   const plain = without.calls.find((c) => c.url.endsWith('/start'))!
   assert.equal('platform' in (plain.body as object), false)
 })
+
+// cp-walk-flag-screenshots: a flag can carry screenshots uploaded through the ticket flow.
+test('a plain flag sends no attachment fields (byte-for-byte the previous request)', async () => {
+  const { impl, calls } = mockFetch({ 'POST /api/walk/start': { walkId: 'w-2' } })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  await a.start()
+  await a.flag({ checkRef: 4, note: 'x', clientReportId: 'c', attachments: [] })
+  const body = calls.find((c) => c.url.endsWith('/flag'))!.body as Record<string, unknown>
+  assert.equal('clientReportId' in body, false)
+  assert.equal('attachments' in body, false)
+})
+
+test('a flag with uploaded screenshots sends clientReportId + refs and returns the stored count', async () => {
+  const { impl, calls } = mockFetch({
+    'POST /api/walk/start': { walkId: 'w-3' },
+    'POST /api/walk/flag': { id: 'i-3', reference: 'INT-9', attachments: 2 },
+  })
+  const a = createWalkAdapter({ ...base, fetchImpl: impl })
+  await a.start()
+  const refs = [{ id: '22222222-2222-2222-2222-222222222222', contentType: 'image/png', bytes: 10 }]
+  const r = await a.flag({ checkRef: 4, note: 'x', clientReportId: '33333333-3333-3333-3333-333333333333', attachments: refs })
+  const body = calls.find((c) => c.url.endsWith('/flag'))!.body as Record<string, unknown>
+  assert.equal(body.clientReportId, '33333333-3333-3333-3333-333333333333')
+  assert.deepEqual(body.attachments, refs)
+  assert.equal(r.attachments, 2)
+})
+
+test('uploadAttachments exists only with a ticketEndpoint, and mints then PUTs each image', async () => {
+  assert.equal(createWalkAdapter({ ...base, fetchImpl: mockFetch({}).impl }).uploadAttachments, undefined)
+  const calls: { url: string; method: string; body?: unknown }[] = []
+  const impl = (async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET'
+    calls.push({ url: String(url), method, body: method === 'POST' ? JSON.parse(String(init?.body)) : undefined })
+    if (String(url) === '/api/beacon-attachment-ticket') {
+      return { ok: true, status: 200, json: async () => ({ tickets: [{ attachmentId: 'a-1', url: 'https://blob/q/a-1?sas' }] }) } as unknown as Response
+    }
+    return { ok: true, status: 201, json: async () => ({}) } as unknown as Response
+  }) as unknown as typeof fetch
+  const a = createWalkAdapter({ ...base, fetchImpl: impl, ticketEndpoint: '/api/beacon-attachment-ticket' })
+  const file = { type: 'image/png', size: 123 } as unknown as File
+  const up = await a.uploadAttachments!([file])
+  assert.match(up.clientReportId, /^[0-9a-f-]{36}$/)
+  assert.deepEqual(up.attachments, [{ id: 'a-1', contentType: 'image/png', bytes: 123 }])
+  const mint = calls[0]!.body as { clientReportId: string; files: unknown[] }
+  assert.equal(mint.clientReportId, up.clientReportId)
+  assert.deepEqual(mint.files, [{ contentType: 'image/png', bytes: 123 }])
+  assert.equal(calls[1]!.method, 'PUT')
+  assert.equal(calls[1]!.url, 'https://blob/q/a-1?sas')
+})

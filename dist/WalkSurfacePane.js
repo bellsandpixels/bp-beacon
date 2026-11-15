@@ -5,8 +5,9 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 // (flagging is looking); the derived verdict updates live. Coverage + flags call the injected WalkAdapter;
 // Submit writes the walk record. The host opens this from the hub's "Start walk". See walkVerdict.ts for
 // the assume-pass rules (kept in step with the bp-qa record format).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { surfacesOf, deriveVerdict } from './walkVerdict.js';
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, validateAttachmentFile } from './attachments.js';
 import { qrMatrix } from './qr.js';
 import { isFlagged, startFailureMessage, withDefect, withDefects, withWalked, withoutDefects } from './walkState.js';
 const v = (name, fallback) => `var(--beacon-${name}, ${fallback})`;
@@ -40,6 +41,12 @@ function CheckHelp({ n, help }) {
     const bad = v('error', '#a8322b');
     return (_jsxs("div", { "data-testid": `walk-check-help-${n}`, style: { marginTop: 6 }, children: [_jsxs("button", { type: "button", onClick: () => setOpen((o) => !o), "aria-expanded": open, style: { display: 'inline-flex', gap: 4, alignItems: 'center', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: v('accent', '#9B251B') }, children: [_jsx("span", { "aria-hidden": true, children: open ? '−' : '+' }), open ? 'Hide guidance' : 'Not sure? Show me how'] }), open ? (_jsxs("div", { style: { marginTop: 6, padding: 12, borderRadius: v('radius', '8px'), border: `1px solid ${v('border', '#e4ddcd')}`, background: v('sunk', '#f0ebe0') }, children: [help.how && help.how.length ? (_jsxs("div", { style: { marginBottom: 12 }, children: [_jsx("p", { style: k, children: "How to do this" }), _jsx("ol", { style: { ...t, paddingLeft: 18 }, children: help.how.map((step, i) => (_jsx("li", { style: { marginBottom: 4 }, children: step }, i))) })] })) : null, help.why ? (_jsxs("div", { style: { marginBottom: 12 }, children: [_jsx("p", { style: k, children: "Why this matters" }), _jsx("p", { style: t, children: help.why })] })) : null, help.success || help.failure ? (_jsxs("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }, children: [help.success ? (_jsxs("div", { style: box(good), children: [_jsx("p", { style: { margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: good }, children: "Looks right when" }), _jsx("p", { style: t, children: help.success })] })) : null, help.failure ? (_jsxs("div", { style: box(bad), children: [_jsx("p", { style: { margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: bad }, children: "Flag it when" }), _jsx("p", { style: t, children: help.failure })] })) : null] })) : null] })) : null] }));
 }
+/** A flagged check's screenshots: Add screenshot, this visit's previews, the stored count, any error. */
+function ShotRow({ n, shot, onPick, input }) {
+    const count = shot?.count ?? 0;
+    const off = !!shot?.busy || count >= MAX_ATTACHMENTS;
+    return (_jsxs("div", { style: { marginTop: 6, display: 'grid', gap: 4 }, "data-testid": `walk-shots-${n}`, children: [_jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, children: [_jsx("button", { type: "button", onClick: onPick, disabled: off, "aria-label": `Add a screenshot to check ${n}`, style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: v('radius', '6px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: 'transparent', color: v('fg', '#1a1a1a'), cursor: off ? 'default' : 'pointer', opacity: off ? 0.55 : 1 }, children: shot?.busy ? 'Uploading...' : 'Add screenshot' }), input, shot?.previews.map((u) => (_jsx("img", { src: u, alt: "", style: { width: 44, height: 44, objectFit: 'cover', borderRadius: 4, border: `1px solid ${v('border', '#d0d0d0')}` } }, u))), _jsx("span", { style: { fontSize: 11, opacity: 0.65 }, children: count ? `${count} of ${MAX_ATTACHMENTS} attached` : `PNG, JPEG or WebP, up to ${MAX_ATTACHMENTS}, 10 MB each` })] }), shot?.error ? (_jsx("p", { role: "alert", style: { margin: 0, fontSize: 11, color: v('error', '#a8322b') }, children: shot.error })) : null] }));
+}
 export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone, onExit, title, links }) {
     const [device, setDevice] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -50,6 +57,14 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
     const [error, setError] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const ready = start.phase === 'ready';
+    // Screenshots on flagged checks (cp-walk-flag-screenshots), offered only when the adapter can upload.
+    // Per check: how many the flag's intake item holds (the server's count), local previews of this visit's
+    // uploads, whether an upload is in flight, and the last upload error for that check.
+    const canAttach = typeof adapter.uploadAttachments === 'function';
+    const [shots, setShots] = useState({});
+    const fileInputs = useRef({});
+    const previewsRef = useRef([]);
+    useEffect(() => () => previewsRef.current.forEach((u) => URL.revokeObjectURL(u)), []);
     const surfaces = useMemo(() => surfacesOf(catalogue), [catalogue]);
     const verdict = useMemo(() => deriveVerdict(catalogue, state), [catalogue, state]);
     // The walk exists only once start() resolves. Until then the checks are not rendered at all, and a failed
@@ -60,6 +75,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
         setStart({ phase: 'starting' });
         setError(null);
         setState({ walked: {}, defects: {} });
+        setShots({});
         adapter
             .start(startOpts)
             .then((s) => {
@@ -112,6 +128,11 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
         if (isFlagged(state, n)) {
             const note = state.defects[n] ?? '';
             setState((s) => withoutDefects(s, [n]));
+            setShots((all) => {
+                const rest = { ...all };
+                delete rest[n];
+                return rest;
+            });
             try {
                 await adapter.clearFlag(n);
             }
@@ -156,6 +177,40 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
         }
         catch (e) {
             notSaved(e, `Could not save the note on check ${n}.`);
+        }
+    }
+    // Attach screenshots to a flagged check: validate (images only, size and count bounded), upload through
+    // the adapter's two-phase ticket flow, then save the flag with them so the server stores them against the
+    // flag's intake item. The current note rides too, so an unsaved note is never lost to this write.
+    async function addShots(n, picked) {
+        if (!ready || !adapter.uploadAttachments)
+            return;
+        const cur = shots[n] ?? { count: 0, previews: [], busy: false };
+        if (cur.busy)
+            return;
+        const set = (patch) => setShots((all) => ({ ...all, [n]: { ...(all[n] ?? cur), ...patch } }));
+        const room = MAX_ATTACHMENTS - cur.count;
+        if (room <= 0)
+            return set({ error: `A flag holds at most ${MAX_ATTACHMENTS} screenshots.` });
+        const bad = picked.map((f) => validateAttachmentFile(f)).find((m) => m);
+        if (bad)
+            return set({ error: bad });
+        const files = picked.slice(0, room);
+        set({ busy: true, error: undefined });
+        try {
+            const up = await adapter.uploadAttachments(files);
+            if (!up.attachments.length)
+                throw new Error('The screenshot did not upload. Try again.');
+            const r = await adapter.flag({ checkRef: n, note: state.defects[n] ?? '', clientReportId: up.clientReportId, attachments: up.attachments });
+            const added = files.slice(0, up.attachments.length).map((f) => URL.createObjectURL(f));
+            previewsRef.current.push(...added);
+            setShots((all) => {
+                const prev = all[n] ?? cur;
+                return { ...all, [n]: { count: r.attachments ?? prev.count + up.attachments.length, previews: [...prev.previews, ...added], busy: false } };
+            });
+        }
+        catch (e) {
+            set({ busy: false, error: `Not saved. ${e instanceof Error && e.message.trim() ? e.message : 'Could not attach that screenshot.'}` });
         }
     }
     async function submit() {
@@ -236,7 +291,22 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
                             const has = isFlagged(state, c.n);
                             const note = state.defects[c.n] ?? '';
                             const noted = has && note.trim().length > 0;
-                            return (_jsxs("div", { style: { display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderTop: `1px solid ${v('border', '#eee')}`, background: has ? (noted ? v('bad-bg', '#f6e5e1') : 'transparent') : 'transparent' }, children: [_jsxs("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }, children: [c.n, "."] }), _jsxs("div", { style: { flex: 1 }, children: [_jsxs("span", { style: { fontSize: 13, color: noted ? v('error', '#a8322b') : v('fg', '#1a1a1a') }, children: [c.text, c.severity === 'blocker' ? (_jsx("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: v('error', '#a8322b'), border: `1px solid ${v('error', '#a8322b')}`, borderRadius: 4, padding: '0 4px', marginLeft: 6 }, children: "must-fix" })) : null] }), hasHelp(c.help) ? _jsx(CheckHelp, { n: c.n, help: c.help }) : null, has ? (_jsxs(_Fragment, { children: [_jsx("input", { value: note, onChange: (e) => setNote(c.n, e.target.value), onBlur: (e) => syncNote(c.n, e.target.value), placeholder: "What is wrong? This becomes the defect record.", "aria-label": `Defect note for check ${c.n}`, style: { display: 'block', width: '100%', marginTop: 6, padding: 6, fontSize: 13, borderRadius: v('radius', '7px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } }), !noted ? (_jsx("p", { style: { margin: '4px 0 0', fontSize: 11, fontStyle: 'italic', opacity: 0.6 }, children: "Note required. Until you write what is wrong, this is not counted as a defect." })) : null] })) : null] }), _jsx("button", { onClick: () => toggleFlag(s.key, c.n), style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: v('radius', '6px'), border: `1px solid ${has ? v('error', '#a8322b') : v('border', '#d0d0d0')}`, background: 'transparent', color: has ? v('error', '#a8322b') : v('fg', '#1a1a1a'), cursor: 'pointer', flex: 'none' }, children: has ? 'Clear' : 'Flag' })] }, c.n));
+                            return (_jsxs("div", { style: { display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderTop: `1px solid ${v('border', '#eee')}`, background: has ? (noted ? v('bad-bg', '#f6e5e1') : 'transparent') : 'transparent' }, children: [_jsxs("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 11, opacity: 0.6 }, children: [c.n, "."] }), _jsxs("div", { style: { flex: 1 }, children: [_jsxs("span", { style: { fontSize: 13, color: noted ? v('error', '#a8322b') : v('fg', '#1a1a1a') }, children: [c.text, c.severity === 'blocker' ? (_jsx("span", { style: { fontFamily: v('mono', 'ui-monospace, monospace'), fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: v('error', '#a8322b'), border: `1px solid ${v('error', '#a8322b')}`, borderRadius: 4, padding: '0 4px', marginLeft: 6 }, children: "must-fix" })) : null] }), hasHelp(c.help) ? _jsx(CheckHelp, { n: c.n, help: c.help }) : null, has ? (_jsxs(_Fragment, { children: [_jsx("input", { value: note, onChange: (e) => setNote(c.n, e.target.value), onBlur: (e) => syncNote(c.n, e.target.value), onPaste: (e) => {
+                                                            if (!canAttach)
+                                                                return;
+                                                            const imgs = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+                                                            if (!imgs.length)
+                                                                return;
+                                                            e.preventDefault();
+                                                            void addShots(c.n, imgs);
+                                                        }, placeholder: canAttach ? 'What is wrong? You can paste a screenshot here too.' : 'What is wrong? This becomes the defect record.', "aria-label": `Defect note for check ${c.n}`, style: { display: 'block', width: '100%', marginTop: 6, padding: 6, fontSize: 13, borderRadius: v('radius', '7px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') } }), !noted ? (_jsx("p", { style: { margin: '4px 0 0', fontSize: 11, fontStyle: 'italic', opacity: 0.6 }, children: "Note required. Until you write what is wrong, this is not counted as a defect." })) : null, canAttach ? (_jsx(ShotRow, { n: c.n, shot: shots[c.n], onPick: () => fileInputs.current[c.n]?.click(), input: _jsx("input", { ref: (el) => {
+                                                                fileInputs.current[c.n] = el;
+                                                            }, type: "file", accept: ATTACHMENT_ACCEPT, multiple: true, hidden: true, "data-testid": `walk-shot-input-${c.n}`, onChange: (e) => {
+                                                                const files = Array.from(e.target.files ?? []);
+                                                                e.target.value = '';
+                                                                if (files.length)
+                                                                    void addShots(c.n, files);
+                                                            } }) })) : null] })) : null] }), _jsx("button", { onClick: () => toggleFlag(s.key, c.n), style: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: v('radius', '6px'), border: `1px solid ${has ? v('error', '#a8322b') : v('border', '#d0d0d0')}`, background: 'transparent', color: has ? v('error', '#a8322b') : v('fg', '#1a1a1a'), cursor: 'pointer', flex: 'none' }, children: has ? 'Clear' : 'Flag' })] }, c.n));
                         })] }, s.key));
             }), _jsxs("div", { style: { borderTop: `1px solid ${v('border', '#e4ddcd')}`, paddingTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [_jsx("span", { style: { flex: 1, fontSize: 13, fontWeight: 600, color: verdictColor }, children: verdict.line }), _jsx("button", { onClick: submit, disabled: submitting, style: { padding: '8px 16px', borderRadius: v('radius', '8px'), border: 'none', background: v('accent', '#9B251B'), color: v('accent-fg', '#fff'), cursor: submitting ? 'default' : 'pointer' }, children: submitting ? 'Submitting...' : 'Submit walk' })] })] }));
 }
