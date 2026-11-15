@@ -17,6 +17,7 @@ import type {
   WalkState,
   WalkSummary,
 } from './walkTypes.js'
+import { uploadViaTickets } from './attachmentUpload.js'
 
 export interface WalkAdapterConfig {
   // Base of the walk API. Web products use a same-origin forwarder (e.g. "/api/walk") that relays to the
@@ -43,6 +44,10 @@ export interface WalkAdapterConfig {
   identityEndpoint?: string
   // Optional: the catalogue check text for a flagged check, so the intake row reads well ("Check 27" otherwise).
   titleForCheck?: (checkRef: number) => string | undefined
+  // Where screenshot upload TICKETS are minted (cp-walk-flag-screenshots): the portal's
+  // /api/beacon-attachment-ticket (or a same-origin forwarder to it). Set it to let a flag carry screenshots;
+  // unset, the adapter exposes no uploadAttachments and the walk pane offers no "Add screenshot".
+  ticketEndpoint?: string
   // Injectable for tests; defaults to the global fetch. Credentials ride so the portal session reaches the API.
   fetchImpl?: typeof fetch
 }
@@ -169,7 +174,7 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
     }
   }
 
-  return {
+  const adapter: WalkAdapter = {
     authenticate: async () => (cfg.authenticate ? cfg.authenticate() : identity()),
     identity,
     available: async (): Promise<WalkAvailability | null> => {
@@ -219,14 +224,17 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
     markWalked: async (surfaceKey, walked) => {
       await postJson('/mark', { walkId: requireWalk(), surfaceKey, walked })
     },
-    flag: async ({ checkRef, note }) => {
-      const r = await postJson<{ id?: string; reference?: string }>('/flag', {
+    flag: async ({ checkRef, note, clientReportId, attachments }) => {
+      // Screenshots ride ONLY when some uploaded, so a plain flag is byte-for-byte the previous request.
+      const shots = clientReportId && attachments?.length ? { clientReportId, attachments } : {}
+      const r = await postJson<{ id?: string; reference?: string; attachments?: number }>('/flag', {
         walkId: requireWalk(),
         checkRef,
         note,
         title: cfg.titleForCheck?.(checkRef),
+        ...shots,
       })
-      return { id: r.id ?? '', reference: r.reference ?? undefined }
+      return { id: r.id ?? '', reference: r.reference ?? undefined, ...(typeof r.attachments === 'number' ? { attachments: r.attachments } : {}) }
     },
     clearFlag: async (checkRef) => {
       await postJson('/clear', { walkId: requireWalk(), checkRef })
@@ -251,4 +259,9 @@ export function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter {
       return (r.assignments ?? []).map(mapAssignment)
     },
   }
+  if (cfg.ticketEndpoint) {
+    const ticketEndpoint = cfg.ticketEndpoint
+    adapter.uploadAttachments = (files) => uploadViaTickets(doFetch, ticketEndpoint, files)
+  }
+  return adapter
 }

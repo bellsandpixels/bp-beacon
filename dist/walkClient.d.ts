@@ -11,6 +11,7 @@ export interface WalkAdapterConfig {
     resolveIdentity?: () => Promise<WalkIdentity>;
     identityEndpoint?: string;
     titleForCheck?: (checkRef: number) => string | undefined;
+    ticketEndpoint?: string;
     fetchImpl?: typeof fetch;
 }
 export declare function createWalkAdapter(cfg: WalkAdapterConfig): WalkAdapter;

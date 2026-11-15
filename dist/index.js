@@ -15,6 +15,7 @@ export { gatherWebContext, osMajorFromUA, osFromUA, deviceFromUA } from './diagn
 export { createBeaconAdapter, buildEnvelope, errorMessageOf } from './adapter.js';
 export { ATTACHMENT_ACCEPT, ATTACHMENT_IMAGE_TYPES, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, validateAttachmentFile, } from './attachments.js';
 export { FeedbackPane } from './FeedbackPane.js';
+export { uploadViaTickets } from './attachmentUpload.js';
 export { WalkPane } from './WalkPane.js';
 export { WalkSurfacePane } from './WalkSurfacePane.js';
 export { deriveVerdict, surfacesOf, checkByNumber } from './walkVerdict.js';

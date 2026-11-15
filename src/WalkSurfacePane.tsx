@@ -5,9 +5,10 @@
 // Submit writes the walk record. The host opens this from the hub's "Start walk". See walkVerdict.ts for
 // the assume-pass rules (kept in step with the bp-qa record format).
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ValidationCatalogue, WalkAdapter, WalkCheckHelp, WalkStartOptions, WalkState } from './walkTypes.js'
 import { surfacesOf, deriveVerdict } from './walkVerdict.js'
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, validateAttachmentFile } from './attachments.js'
 import { qrMatrix } from './qr.js'
 import { isFlagged, startFailureMessage, withDefect, withDefects, withWalked, withoutDefects } from './walkState.js'
 
@@ -138,6 +139,47 @@ function CheckHelp({ n, help }: { n: number; help: WalkCheckHelp }) {
   )
 }
 
+/** One flagged check's screenshot state (cp-walk-flag-screenshots). */
+interface Shot {
+  count: number // how many the flag's intake item holds (the server's count after the last attach)
+  previews: string[] // object URLs of this visit's uploads, for the thumbnails
+  busy: boolean
+  error?: string
+}
+
+/** A flagged check's screenshots: Add screenshot, this visit's previews, the stored count, any error. */
+function ShotRow({ n, shot, onPick, input }: { n: number; shot?: Shot; onPick: () => void; input: ReactNode }) {
+  const count = shot?.count ?? 0
+  const off = !!shot?.busy || count >= MAX_ATTACHMENTS
+  return (
+    <div style={{ marginTop: 6, display: 'grid', gap: 4 }} data-testid={`walk-shots-${n}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={onPick}
+          disabled={off}
+          aria-label={`Add a screenshot to check ${n}`}
+          style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: v('radius', '6px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: 'transparent', color: v('fg', '#1a1a1a'), cursor: off ? 'default' : 'pointer', opacity: off ? 0.55 : 1 }}
+        >
+          {shot?.busy ? 'Uploading...' : 'Add screenshot'}
+        </button>
+        {input}
+        {shot?.previews.map((u) => (
+          <img key={u} src={u} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 4, border: `1px solid ${v('border', '#d0d0d0')}` }} />
+        ))}
+        <span style={{ fontSize: 11, opacity: 0.65 }}>
+          {count ? `${count} of ${MAX_ATTACHMENTS} attached` : `PNG, JPEG or WebP, up to ${MAX_ATTACHMENTS}, 10 MB each`}
+        </span>
+      </div>
+      {shot?.error ? (
+        <p role="alert" style={{ margin: 0, fontSize: 11, color: v('error', '#a8322b') }}>
+          {shot.error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onDone, onExit, title, links }: WalkSurfacePaneProps) {
   const [device, setDevice] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -148,6 +190,14 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const ready = start.phase === 'ready'
+  // Screenshots on flagged checks (cp-walk-flag-screenshots), offered only when the adapter can upload.
+  // Per check: how many the flag's intake item holds (the server's count), local previews of this visit's
+  // uploads, whether an upload is in flight, and the last upload error for that check.
+  const canAttach = typeof adapter.uploadAttachments === 'function'
+  const [shots, setShots] = useState<Record<number, Shot>>({})
+  const fileInputs = useRef<Record<number, HTMLInputElement | null>>({})
+  const previewsRef = useRef<string[]>([])
+  useEffect(() => () => previewsRef.current.forEach((u) => URL.revokeObjectURL(u)), [])
 
   const surfaces = useMemo(() => surfacesOf(catalogue), [catalogue])
   const verdict = useMemo(() => deriveVerdict(catalogue, state), [catalogue, state])
@@ -160,6 +210,7 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
     setStart({ phase: 'starting' })
     setError(null)
     setState({ walked: {}, defects: {} })
+    setShots({})
     adapter
       .start(startOpts)
       .then((s) => {
@@ -213,6 +264,11 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
     if (isFlagged(state, n)) {
       const note = state.defects[n] ?? ''
       setState((s) => withoutDefects(s, [n]))
+      setShots((all) => {
+        const rest = { ...all }
+        delete rest[n]
+        return rest
+      })
       try {
         await adapter.clearFlag(n)
       } catch (e) {
@@ -254,6 +310,35 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
       await adapter.flag({ checkRef: n, note })
     } catch (e) {
       notSaved(e, `Could not save the note on check ${n}.`)
+    }
+  }
+
+  // Attach screenshots to a flagged check: validate (images only, size and count bounded), upload through
+  // the adapter's two-phase ticket flow, then save the flag with them so the server stores them against the
+  // flag's intake item. The current note rides too, so an unsaved note is never lost to this write.
+  async function addShots(n: number, picked: File[]) {
+    if (!ready || !adapter.uploadAttachments) return
+    const cur: Shot = shots[n] ?? { count: 0, previews: [], busy: false }
+    if (cur.busy) return
+    const set = (patch: Partial<Shot>) => setShots((all) => ({ ...all, [n]: { ...(all[n] ?? cur), ...patch } }))
+    const room = MAX_ATTACHMENTS - cur.count
+    if (room <= 0) return set({ error: `A flag holds at most ${MAX_ATTACHMENTS} screenshots.` })
+    const bad = picked.map((f) => validateAttachmentFile(f)).find((m) => m)
+    if (bad) return set({ error: bad })
+    const files = picked.slice(0, room)
+    set({ busy: true, error: undefined })
+    try {
+      const up = await adapter.uploadAttachments(files)
+      if (!up.attachments.length) throw new Error('The screenshot did not upload. Try again.')
+      const r = await adapter.flag({ checkRef: n, note: state.defects[n] ?? '', clientReportId: up.clientReportId, attachments: up.attachments })
+      const added = files.slice(0, up.attachments.length).map((f) => URL.createObjectURL(f))
+      previewsRef.current.push(...added)
+      setShots((all) => {
+        const prev = all[n] ?? cur
+        return { ...all, [n]: { count: r.attachments ?? prev.count + up.attachments.length, previews: [...prev.previews, ...added], busy: false } }
+      })
+    } catch (e) {
+      set({ busy: false, error: `Not saved. ${e instanceof Error && e.message.trim() ? e.message : 'Could not attach that screenshot.'}` })
     }
   }
 
@@ -486,7 +571,14 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
                           value={note}
                           onChange={(e) => setNote(c.n, e.target.value)}
                           onBlur={(e) => syncNote(c.n, e.target.value)}
-                          placeholder="What is wrong? This becomes the defect record."
+                          onPaste={(e) => {
+                            if (!canAttach) return
+                            const imgs = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'))
+                            if (!imgs.length) return
+                            e.preventDefault()
+                            void addShots(c.n, imgs)
+                          }}
+                          placeholder={canAttach ? 'What is wrong? You can paste a screenshot here too.' : 'What is wrong? This becomes the defect record.'}
                           aria-label={`Defect note for check ${c.n}`}
                           style={{ display: 'block', width: '100%', marginTop: 6, padding: 6, fontSize: 13, borderRadius: v('radius', '7px'), border: `1px solid ${v('border', '#d0d0d0')}`, background: v('field-bg', '#fff'), color: v('fg', '#1a1a1a') }}
                         />
@@ -494,6 +586,30 @@ export function WalkSurfacePane({ catalogue, adapter, build, env, startOpts, onD
                           <p style={{ margin: '4px 0 0', fontSize: 11, fontStyle: 'italic', opacity: 0.6 }}>
                             Note required. Until you write what is wrong, this is not counted as a defect.
                           </p>
+                        ) : null}
+                        {canAttach ? (
+                          <ShotRow
+                            n={c.n}
+                            shot={shots[c.n]}
+                            onPick={() => fileInputs.current[c.n]?.click()}
+                            input={
+                              <input
+                                ref={(el) => {
+                                  fileInputs.current[c.n] = el
+                                }}
+                                type="file"
+                                accept={ATTACHMENT_ACCEPT}
+                                multiple
+                                hidden
+                                data-testid={`walk-shot-input-${c.n}`}
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files ?? [])
+                                  e.target.value = ''
+                                  if (files.length) void addShots(c.n, files)
+                                }}
+                              />
+                            }
+                          />
                         ) : null}
                       </>
                     ) : null}

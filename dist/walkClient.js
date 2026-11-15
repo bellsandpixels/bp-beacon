@@ -5,6 +5,7 @@
 // backend-agnostic: the host supplies the endpoint (a same-origin forwarder, e.g. "/api/walk", or the
 // portal URL directly) plus how the tester is authenticated (the portal magic-link). This is the ONE
 // client implementation a portal-backed product wires once; the stub (createStubWalkAdapter) is for demos.
+import { uploadViaTickets } from './attachmentUpload.js';
 function mapAssignment(a) {
     return {
         id: a.id ?? '',
@@ -86,7 +87,7 @@ export function createWalkAdapter(cfg) {
             return { authenticated: false };
         }
     }
-    return {
+    const adapter = {
         authenticate: async () => (cfg.authenticate ? cfg.authenticate() : identity()),
         identity,
         available: async () => {
@@ -139,14 +140,17 @@ export function createWalkAdapter(cfg) {
         markWalked: async (surfaceKey, walked) => {
             await postJson('/mark', { walkId: requireWalk(), surfaceKey, walked });
         },
-        flag: async ({ checkRef, note }) => {
+        flag: async ({ checkRef, note, clientReportId, attachments }) => {
+            // Screenshots ride ONLY when some uploaded, so a plain flag is byte-for-byte the previous request.
+            const shots = clientReportId && attachments?.length ? { clientReportId, attachments } : {};
             const r = await postJson('/flag', {
                 walkId: requireWalk(),
                 checkRef,
                 note,
                 title: cfg.titleForCheck?.(checkRef),
+                ...shots,
             });
-            return { id: r.id ?? '', reference: r.reference ?? undefined };
+            return { id: r.id ?? '', reference: r.reference ?? undefined, ...(typeof r.attachments === 'number' ? { attachments: r.attachments } : {}) };
         },
         clearFlag: async (checkRef) => {
             await postJson('/clear', { walkId: requireWalk(), checkRef });
@@ -171,4 +175,9 @@ export function createWalkAdapter(cfg) {
             return (r.assignments ?? []).map(mapAssignment);
         },
     };
+    if (cfg.ticketEndpoint) {
+        const ticketEndpoint = cfg.ticketEndpoint;
+        adapter.uploadAttachments = (files) => uploadViaTickets(doFetch, ticketEndpoint, files);
+    }
+    return adapter;
 }
